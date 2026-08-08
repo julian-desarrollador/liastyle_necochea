@@ -1,27 +1,20 @@
 /**
  * Reglas de agenda indicadas por el salón.
  *
- * Trabajos técnicos (martes a viernes):
- *   → No pueden empezar después de las 14:00 (cierre 16:30).
- *
- * Trabajos técnicos (sábados):
- *   → Deben TERMINAR a las 13:00 o antes (después trabaja solo peinados).
- *   → El último inicio permitido = 13:00 − duración del servicio.
+ * Trabajos técnicos (días abiertos):
+ *   → No pueden empezar después de las 14:00.
  */
 
 // ─── Horarios de corte ────────────────────────────────────────────────────────
 
-/** Último inicio permitido para trabajos técnicos martes-viernes. */
+/** Último inicio permitido para trabajos técnicos. */
 export const TECH_LATEST_START_TUE_FRI = "14:00";
-
-/** Minutos del día en que terminan los trabajos técnicos los sábados (13:00). */
-const SAT_TECH_END_MINUTES = 13 * 60; // 780
 
 // ─── Trabajos técnicos (id → durationMinutes) ────────────────────────────────
 
 /**
  * Trabajos técnicos del salón con sus duraciones (en minutos).
- * Estos servicios tienen restricción horaria en Tue-Vie y Sábados.
+ * Estos servicios tienen restricción de último horario de inicio.
  */
 const TECHNICAL_TREATMENTS = new Map<string, number>([
   ["correccion-color", 90],
@@ -64,28 +57,6 @@ const TECHNICAL_TREATMENTS = new Map<string, number>([
   ["keratina", 60],
 ]);
 
-// ─── Helpers internos ─────────────────────────────────────────────────────────
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-function isSaturday(dateKey: string): boolean {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  if (!y || !m || !d) return false;
-  return new Date(y, m - 1, d).getDay() === 6;
-}
-
-/**
- * Último inicio permitido para un trabajo técnico el sábado,
- * de modo que el servicio termine exactamente a las 13:00 o antes.
- */
-function saturdayTechLastStart(durationMinutes: number): string {
-  const lastStartMins = SAT_TECH_END_MINUTES - durationMinutes;
-  if (lastStartMins < 0) return "00:00";
-  return `${pad2(Math.floor(lastStartMins / 60))}:${pad2(lastStartMins % 60)}`;
-}
-
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 export function isTechnicalTreatment(treatmentId: string): boolean {
@@ -101,12 +72,12 @@ export const KERATINA_ONLY_TIME_LOCAL = "15:00";
 
 /**
  * Filtra los slots según las reglas de negocio del tratamiento.
- * Pasar `dateKey` para aplicar las restricciones del sábado.
+ * `dateKey` se mantiene por compatibilidad con callers; ya no aplica regla especial de sábado.
  */
 export function filterPublicSlotsByTreatmentRules(
   treatmentId: string | undefined,
   slots: string[],
-  dateKey?: string,
+  _dateKey?: string,
 ): string[] {
   if (!treatmentId) return slots;
 
@@ -114,13 +85,7 @@ export function filterPublicSlotsByTreatmentRules(
     return slots.filter((t) => t === KERATINA_ONLY_TIME_LOCAL);
   }
 
-  const duration = TECHNICAL_TREATMENTS.get(treatmentId);
-  if (duration === undefined) return slots;
-
-  if (dateKey && isSaturday(dateKey)) {
-    const lastStart = saturdayTechLastStart(duration);
-    return slots.filter((t) => t <= lastStart);
-  }
+  if (!TECHNICAL_TREATMENTS.has(treatmentId)) return slots;
 
   return slots.filter((t) => t <= TECH_LATEST_START_TUE_FRI);
 }
