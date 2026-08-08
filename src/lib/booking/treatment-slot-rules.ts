@@ -1,20 +1,13 @@
 /**
- * Reglas de agenda indicadas por el salón.
- *
- * Trabajos técnicos (días abiertos):
- *   → No pueden empezar después de las 14:00.
+ * Reglas de agenda por tratamiento.
+ * (Sin tope de inicio 14:00 para técnicos: se ofrecen según grilla, cierre del día y cupo.)
  */
 
-// ─── Horarios de corte ────────────────────────────────────────────────────────
-
-/** Último inicio permitido para trabajos técnicos. */
-export const TECH_LATEST_START_TUE_FRI = "14:00";
-
-// ─── Trabajos técnicos (id → durationMinutes) ────────────────────────────────
+// ─── Trabajos técnicos (id → durationMinutes; referencia / legacy) ───────────
 
 /**
  * Trabajos técnicos del salón con sus duraciones (en minutos).
- * Estos servicios tienen restricción de último horario de inicio.
+ * Se mantiene el mapa por compatibilidad con helpers y reservas antiguas.
  */
 const TECHNICAL_TREATMENTS = new Map<string, number>([
   ["correccion-color", 90],
@@ -71,8 +64,8 @@ export function treatmentIsKeratinaOnly1530(treatmentId: string): boolean {
 export const KERATINA_ONLY_TIME_LOCAL = "15:00";
 
 /**
- * Filtra los slots según las reglas de negocio del tratamiento.
- * `dateKey` se mantiene por compatibilidad con callers; ya no aplica regla especial de sábado.
+ * Filtra los slots según reglas por tratamiento.
+ * Ya no hay tope de inicio 14:00 para técnicos.
  */
 export function filterPublicSlotsByTreatmentRules(
   treatmentId: string | undefined,
@@ -85,13 +78,15 @@ export function filterPublicSlotsByTreatmentRules(
     return slots.filter((t) => t === KERATINA_ONLY_TIME_LOCAL);
   }
 
-  if (!TECHNICAL_TREATMENTS.has(treatmentId)) return slots;
-
-  return slots.filter((t) => t <= TECH_LATEST_START_TUE_FRI);
+  return slots;
 }
 
+/** @deprecated Sin tope 14:00; se mantiene por imports legacy. */
+export const TECH_LATEST_START_TUE_FRI = "14:00";
+
+/** @deprecated Sin tope 14:00; se mantiene por imports legacy. */
 export const REFLEJOS_BALAYAGE_LATEST_START = TECH_LATEST_START_TUE_FRI;
 
 export function treatmentRequiresStartNoLaterThan14(treatmentId: string): boolean {
-  return TECHNICAL_TREATMENTS.has(treatmentId);
+  return false;
 }
