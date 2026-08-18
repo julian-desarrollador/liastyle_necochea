@@ -16,7 +16,7 @@ export type CustomerReservationPublic = {
   reservationStatus: ReservationStatus;
   paymentStatus: string;
   source: ReservationSource;
-  cancelledBy?: "panel" | "customer" | null;
+  cancelledBy?: "panel" | "customer" | "whatsapp" | null;
 };
 
 export function serializeReservationForCustomer(r: ReservationDoc): CustomerReservationPublic {

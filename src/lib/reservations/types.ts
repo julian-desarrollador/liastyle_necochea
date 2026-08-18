@@ -16,7 +16,7 @@ export type PaymentStatus = "not_required" | "pending" | "simulated_paid" | "app
 
 export type ReservationSource = "app_turnos" | "panel";
 export type ReservationBookingMode = "single" | "combo";
-export type ReservationCancelledBy = "panel" | "customer";
+export type ReservationCancelledBy = "panel" | "customer" | "whatsapp";
 
 export type ReservationServiceItem = {
   treatmentId: string;
@@ -80,6 +80,12 @@ export type ReservationDoc = {
   cancelledBy?: ReservationCancelledBy | null;
   /** Marca de envío del recordatorio WhatsApp ~24h antes (cron). */
   waReminder24hSentAt?: Date | null;
+  /** SID del recordatorio vigente; invalida botones de mensajes anteriores. */
+  waReminder24hMessageSid?: string | null;
+  /** Estado técnico del intento vigente. */
+  waReminder24hStatus?: "sending" | "sent" | "unknown" | null;
+  /** La clienta confirmó asistencia desde el botón del recordatorio. */
+  waAttendanceConfirmedAt?: Date | null;
 };
 
 export type CreateReservationInput = {

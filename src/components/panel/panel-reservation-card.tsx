@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import {
   CalendarClock,
   Check,
+  Circle,
   FileText,
   Hand,
   MessageCircle,
@@ -57,7 +58,9 @@ function reservationStatusChip(
         ? "Desde el panel"
         : cancelledBy === "customer"
           ? "Desde la web (cliente)"
-          : null;
+          : cancelledBy === "whatsapp"
+            ? "Desde WhatsApp"
+            : null;
     return {
       badge: "Cancelada",
       badgeClass: "bg-gray-100 text-gray-700",
@@ -137,6 +140,119 @@ function paymentStatusChip(paymentStatus: string): {
         badgeClass: "bg-gray-100 text-gray-700",
       };
   }
+}
+
+function formatWaTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function WhatsAppTrackingBlock({
+  reservation,
+}: {
+  reservation: PanelReservation;
+}) {
+  if (reservation.reservationStatus === "cancelled") {
+    return reservation.cancelledBy === "whatsapp" ? (
+      <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-[13px] leading-snug text-red-800">
+        Canceló el turno respondiendo al recordatorio por WhatsApp.
+      </p>
+    ) : null;
+  }
+
+  if (
+    reservation.reservationStatus !== "confirmed" &&
+    reservation.reservationStatus !== "pending_payment"
+  ) {
+    return null;
+  }
+
+  const reminderStatus =
+    reservation.waReminder24hStatus ??
+    (reservation.waReminder24hSentAt ? "sent" : null);
+  const reminderSent = reminderStatus === "sent";
+  const reminderInProgress = reminderStatus === "sending";
+  const reminderUnknown = reminderStatus === "unknown";
+  const reminderAttempted = Boolean(reservation.waReminder24hSentAt);
+  const attendanceConfirmed = Boolean(reservation.waAttendanceConfirmedAt);
+  const reminderWhen = reservation.waReminder24hSentAt
+    ? formatWaTimestamp(reservation.waReminder24hSentAt)
+    : "";
+  const attendanceWhen = reservation.waAttendanceConfirmedAt
+    ? formatWaTimestamp(reservation.waAttendanceConfirmedAt)
+    : "";
+
+  return (
+    <div className="mt-3 space-y-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+      <p className="text-[11px] font-semibold tracking-[0.08em] text-gray-500 uppercase">
+        WhatsApp
+      </p>
+      <div className="flex items-start gap-2 text-[13px] leading-snug">
+        {reminderSent ? (
+          <Check
+            className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+            strokeWidth={2.5}
+          />
+        ) : (
+          <Circle
+            className={[
+              "mt-0.5 h-4 w-4 shrink-0",
+              reminderInProgress || reminderUnknown
+                ? "text-amber-500"
+                : "text-gray-300",
+            ].join(" ")}
+            strokeWidth={2}
+          />
+        )}
+        <p
+          className={
+            reminderSent
+              ? "text-gray-800"
+              : reminderInProgress || reminderUnknown
+                ? "text-amber-800"
+                : "text-gray-500"
+          }
+        >
+          <span className="font-medium">Recordatorio 24h:</span>{" "}
+          {reminderSent
+            ? `Enviado${reminderWhen ? ` · ${reminderWhen}` : ""}`
+            : reminderInProgress
+              ? "Procesando"
+              : reminderUnknown
+                ? `Estado incierto${reminderWhen ? ` · ${reminderWhen}` : ""}`
+                : "Aún no enviado"}
+        </p>
+      </div>
+      <div className="flex items-start gap-2 text-[13px] leading-snug">
+        {attendanceConfirmed ? (
+          <Check
+            className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+            strokeWidth={2.5}
+          />
+        ) : (
+          <Circle
+            className="mt-0.5 h-4 w-4 shrink-0 text-gray-300"
+            strokeWidth={2}
+          />
+        )}
+        <p className={attendanceConfirmed ? "text-gray-800" : "text-gray-500"}>
+          <span className="font-medium">Asistencia:</span>{" "}
+          {attendanceConfirmed
+            ? `Confirmó${attendanceWhen ? ` · ${attendanceWhen}` : ""}`
+            : reminderAttempted
+              ? "Sin confirmar"
+              : "Pendiente (tras el recordatorio)"}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export const PanelReservationCard = forwardRef<HTMLElement, PanelReservationCardProps>(
@@ -245,6 +361,7 @@ export const PanelReservationCard = forwardRef<HTMLElement, PanelReservationCard
           {chip.detail ? (
             <p className="mt-1.5 text-[11px] font-medium text-gray-500">{chip.detail}</p>
           ) : null}
+          <WhatsAppTrackingBlock reservation={r} />
         </div>
 
         {canManage ? (

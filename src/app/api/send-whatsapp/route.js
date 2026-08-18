@@ -1,20 +1,12 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/mongodb";
-import { getTwilioClient } from "@/lib/twilio";
-
-function normalizeTo(to) {
-  // normaliza a +549 para celulares argentinos
-  let phone = String(to ?? "").replace(/\D/g, ""); // saca espacios
-  if (!phone) throw new Error("El campo 'to' es obligatorio");
-  if (phone.startsWith("549")) phone = phone;
-  else if (phone.startsWith("54")) phone = `549${phone.slice(2)}`;
-  else if (phone.startsWith("9")) phone = `54${phone}`;
-  else phone = `549${phone}`;
-
-  const toWhatsApp = `whatsapp:+${phone}`;
-  return toWhatsApp;
-}
+import { verifyPanelCookie } from "@/lib/panel-turnos-auth";
+import { buildTwilioWhatsAppSendParams, getTwilioClient } from "@/lib/twilio";
+import { buildReminderContentVariablesFromValues } from "@/lib/whatsapp/reminder-content-variables";
+import { normalizeToWhatsAppE164 } from "@/lib/whatsapp/twilio-phone";
+import { insertWhatsappOutboundLog } from "@/lib/whatsapp/whatsapp-logs";
 
 function methodNotAllowed() {
   return NextResponse.json({ error: "Método no permitido" }, { status: 405 });
@@ -41,6 +33,11 @@ export function OPTIONS() {
 }
 
 export async function POST(request) {
+  const cookieStore = await cookies();
+  if (!verifyPanelCookie(cookieStore.get("panel_turnos_auth")?.value)) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
   let to = "";
   let nombre = "";
   let servicio = "";
@@ -62,46 +59,53 @@ export async function POST(request) {
       );
     }
 
-    const from = process.env.TWILIO_WHATSAPP_FROM;
-    const contentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
-    if (!from) throw new Error("Falta variable de entorno: TWILIO_WHATSAPP_FROM");
-    if (!contentSid) throw new Error("Falta variable de entorno: TWILIO_REMINDER_CONTENT_SID");
+    const contentSid = process.env.TWILIO_REMINDER_NEW_CONTENT_SID?.trim();
+    if (!contentSid) {
+      throw new Error("Falta variable de entorno: TWILIO_REMINDER_NEW_CONTENT_SID");
+    }
 
     const client = getTwilioClient();
+    const sendParams = await buildTwilioWhatsAppSendParams(client);
+    const { contentVariablesJson, templateVariables } =
+      buildReminderContentVariablesFromValues({ nombre, servicio, fecha, hora });
     const response = await client.messages.create({
-      from,
-      to: normalizeTo(to),
+      ...sendParams,
+      to: normalizeToWhatsAppE164(to),
       contentSid,
-      contentVariables: JSON.stringify({
-        "1": nombre,
-        "2": servicio,
-        "3": fecha,
-        "4": hora,
-      }),
+      contentVariables: contentVariablesJson,
     });
 
-    const db = await getDb();
-    await db.collection("whatsapp_logs").insertOne({
-      to: String(to),
-      sid: response.sid,
-      status: response.status,
-      template: contentSid,
-      templateVariables: { nombre, servicio, fecha, hora },
-      createdAt: new Date(),
-    });
+    try {
+      const db = await getDb();
+      await insertWhatsappOutboundLog(db, {
+        reservationId: "manual",
+        to: String(to),
+        sid: response.sid,
+        status: response.status,
+        template: contentSid,
+        templateVariables,
+      });
+    } catch (logError) {
+      console.error("[api/send-whatsapp] enviado sin log", logError);
+      return NextResponse.json({
+        success: true,
+        sid: response.sid,
+        logged: false,
+      });
+    }
 
-    return NextResponse.json({ success: true, sid: response.sid });
+    return NextResponse.json({ success: true, sid: response.sid, logged: true });
   } catch (error) {
     try {
       if (to) {
         const db = await getDb();
-        await db.collection("whatsapp_logs").insertOne({
+        await insertWhatsappOutboundLog(db, {
+          reservationId: "manual",
           to: String(to),
           sid: null,
           status: "failed",
-          template: process.env.TWILIO_REMINDER_CONTENT_SID ?? null,
+          template: process.env.TWILIO_REMINDER_NEW_CONTENT_SID ?? null,
           templateVariables: { nombre, servicio, fecha, hora },
-          createdAt: new Date(),
           error: error instanceof Error ? error.message : "Error desconocido",
         });
       }

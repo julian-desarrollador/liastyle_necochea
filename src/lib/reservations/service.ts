@@ -52,7 +52,7 @@ function pendingTtlMs(): number {
 }
 
 /** Subir si cambia la definición de índices o la normalización de teléfonos (fuerza re-backfill). */
-const RESERVATION_INDEXES_VERSION = 4;
+const RESERVATION_INDEXES_VERSION = 5;
 let reservationIndexesVersionApplied = 0;
 
 export async function ensureReservationIndexes(db: Db) {
@@ -77,6 +77,10 @@ export async function ensureReservationIndexes(db: Db) {
   await col.createIndex({ externalReference: 1 }, { sparse: true, name: "by_external_ref" });
   await col.createIndex({ paymentDeadlineAt: 1 }, { sparse: true, name: "by_payment_deadline" });
   await col.createIndex({ customerPhoneDigits: 1, startsAt: -1 }, { name: "by_customer_phone_starts" });
+  await col.createIndex(
+    { waReminder24hMessageSid: 1 },
+    { unique: true, sparse: true, name: "by_wa_reminder_message_sid" },
+  );
 
   await logs.createIndex({ receivedAt: -1 }, { name: "mp_logs_received" });
   await logs.createIndex({ resourceId: 1, receivedAt: -1 }, { name: "mp_logs_resource" });
@@ -681,7 +685,12 @@ export async function rescheduleReservation(
         displayDate,
         updatedAt,
       },
-      $unset: { waReminder24hSentAt: "" },
+      $unset: {
+        waReminder24hSentAt: "",
+        waReminder24hMessageSid: "",
+        waReminder24hStatus: "",
+        waAttendanceConfirmedAt: "",
+      },
     },
   );
 
@@ -692,17 +701,65 @@ export async function rescheduleReservation(
   return { ok: true as const };
 }
 
+/** Registra que la clienta tocó «Confirmar» en WhatsApp, sin cambiar el pago. */
+export async function confirmAttendanceViaWhatsApp(
+  db: Db,
+  input: {
+    reservationHexId: string;
+    expectedReminderSid: string;
+    now?: Date;
+  },
+): Promise<{ ok: true; already?: boolean } | { error: string; code?: string }> {
+  await ensureReservationIndexes(db);
+  const hex = input.reservationHexId.trim();
+  const doc = await findReservationByHexId(db, hex);
+  if (!doc) {
+    return { error: "Turno no encontrado.", code: "NOT_FOUND" };
+  }
+  if (doc.reservationStatus === "cancelled") {
+    return { error: "El turno está cancelado.", code: "CANCELLED" };
+  }
+  if (doc.waReminder24hMessageSid !== input.expectedReminderSid) {
+    return { error: "Ese recordatorio ya no está vigente.", code: "STALE_REMINDER" };
+  }
+  if (doc.waAttendanceConfirmedAt) {
+    return { ok: true, already: true };
+  }
+
+  const now = input.now ?? new Date();
+  const result = await db.collection<ReservationDoc>(COLLECTION).updateOne(
+    {
+      _id: doc._id,
+      reservationStatus: { $in: ["confirmed", "pending_payment"] },
+      waReminder24hMessageSid: input.expectedReminderSid,
+      $or: [
+        { waAttendanceConfirmedAt: null },
+        { waAttendanceConfirmedAt: { $exists: false } },
+      ],
+    },
+    { $set: { waAttendanceConfirmedAt: now, updatedAt: now } },
+  );
+
+  if (result.modifiedCount !== 1) {
+    const current = await findReservationByHexId(db, hex);
+    if (current?.waAttendanceConfirmedAt) return { ok: true, already: true };
+    return { error: "No se pudo registrar la confirmación.", code: "CONFLICT" };
+  }
+  return { ok: true };
+}
+
 /**
  * Cancela una reserva activa.
- * Cliente: solo su WhatsApp; panel: cualquier turno cancelable.
+ * Cliente o WhatsApp: solo su teléfono y con 24 h; panel: cualquier turno cancelable.
  */
 export async function cancelReservation(
   db: Db,
   input: {
     reservationHexId: string;
     now: Date;
-    actor: "panel" | "customer";
+    actor: "panel" | "customer" | "whatsapp";
     customerCanonicalDigits?: string | null;
+    expectedReminderSid?: string | null;
     cancelReason?: string | null;
   },
 ): Promise<{ ok: true } | { error: string; code?: string }> {
@@ -716,14 +773,27 @@ export async function cancelReservation(
     return { error: "Este turno no se puede cancelar.", code: "NOT_CANCELLABLE" };
   }
 
-  if (input.actor === "customer") {
+  if (input.actor === "customer" || input.actor === "whatsapp") {
     const canon = input.customerCanonicalDigits?.trim();
     if (!canon) {
-      return { error: "Tenés que iniciar sesión en tu perfil.", code: "UNAUTHORIZED" };
+      return {
+        error:
+          input.actor === "customer"
+            ? "Tenés que iniciar sesión en tu perfil."
+            : "No pudimos reconocer tu teléfono.",
+        code: "UNAUTHORIZED",
+      };
     }
     const docDigits = doc.customerPhoneDigits ?? canonicalPhoneDigitsAR(doc.customerPhone);
     if (!customerPhoneDigitsQueryValues(canon).includes(docDigits)) {
       return { error: "No podés modificar un turno de otro cliente.", code: "FORBIDDEN" };
+    }
+    if (
+      input.actor === "whatsapp" &&
+      (!input.expectedReminderSid ||
+        doc.waReminder24hMessageSid !== input.expectedReminderSid)
+    ) {
+      return { error: "Ese recordatorio ya no está vigente.", code: "STALE_REMINDER" };
     }
     if (!canCustomerCancelByStartsAt(doc.startsAt, input.now)) {
       return { error: CUSTOMER_CANCEL_TOO_LATE_MESSAGE, code: "TOO_LATE" };
@@ -734,7 +804,13 @@ export async function cancelReservation(
   const reasonRaw = String(input.cancelReason ?? "").trim();
   const reason = reasonRaw.length > 160 ? reasonRaw.slice(0, 160) : reasonRaw;
   const result = await db.collection<ReservationDoc>(COLLECTION).updateOne(
-    { _id: doc._id, reservationStatus: doc.reservationStatus },
+    {
+      _id: doc._id,
+      reservationStatus: doc.reservationStatus,
+      ...(input.actor === "whatsapp"
+        ? { waReminder24hMessageSid: input.expectedReminderSid }
+        : {}),
+    },
     {
       $set: {
         reservationStatus: "cancelled",
@@ -742,7 +818,12 @@ export async function cancelReservation(
         cancelledBy: input.actor,
         updatedAt,
       },
-      $unset: { waReminder24hSentAt: "" },
+      $unset: {
+        waReminder24hSentAt: "",
+        waReminder24hMessageSid: "",
+        waReminder24hStatus: "",
+        waAttendanceConfirmedAt: "",
+      },
     },
   );
   if (result.modifiedCount !== 1) {

@@ -8,7 +8,7 @@ import { normalizePhoneDigits } from "@/lib/booking/salon-availability";
  *   "11 2345 6789"        → "5491123456789"   (solo área + número, 10 dígitos)
  *   "9 11 2345 6789"      → "5491123456789"   (prefijo móvil arg sin país, 11 dígitos)
  *   "011 2345 6789"       → "5491123456789"   (prefijo discado 0 + área, 11 dígitos)
- *   "+54 11 2345 6789"    → "541123456789"    (país sin 9, se deja tal cual)
+ *   "+54 11 2345 6789"    → "5491123456789"   (país sin 9 móvil)
  */
 export function canonicalPhoneDigitsAR(raw: string): string {
   const d = normalizePhoneDigits(raw);
@@ -16,8 +16,8 @@ export function canonicalPhoneDigitsAR(raw: string): string {
 
   // Ya tiene prefijo correcto
   if (d.startsWith("549")) return d;
-  // Tiene código de país pero sin "9" móvil — se respeta tal cual
-  if (d.startsWith("54")) return d;
+  // Tiene código de país pero sin "9" móvil — agregarlo para identidad WhatsApp.
+  if (d.startsWith("54")) return `549${d.slice(2)}`;
 
   // "0XXXXXXXXX…" (9–12 dígitos): prefijo de discado nacional en Argentina (trunk "0")
   // "011 2345 6789" → "01123456789" → strip "0" → "549" + "1123456789"

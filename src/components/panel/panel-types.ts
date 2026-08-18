@@ -11,8 +11,11 @@ export type PanelReservation = {
   customerPhone: string;
   reservationStatus: string;
   paymentStatus: string;
-  cancelledBy?: "panel" | "customer" | null;
+  cancelledBy?: "panel" | "customer" | "whatsapp" | null;
   source?: string;
+  waReminder24hSentAt?: string | null;
+  waReminder24hStatus?: "sending" | "sent" | "unknown" | null;
+  waAttendanceConfirmedAt?: string | null;
   startsAt: string;
   createdAt: string;
 };

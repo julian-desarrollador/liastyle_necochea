@@ -41,18 +41,18 @@ export async function backfillCustomerPhoneDigitsBatch(db: Db, batchSize = 250):
 
 /**
  * Re-normaliza `customerPhoneDigits` en todos los documentos cuya forma guardada
- * no coincide con la normalización corregida (variantes "0…" o "9…" mal canonicalizadas).
+ * no coincide con la normalización corregida (variantes sin 9, con 0 o con 9 duplicado).
  * Se ejecuta una sola vez al subir la versión de índices.
  */
 export async function renormalizeCustomerPhoneDigitsBatch(db: Db, batchSize = 250): Promise<number> {
   const col = db.collection<ReservationDoc>(COLLECTION);
   // Busca documentos con la forma canónica antigua incorrecta:
-  // "5490XXXXXXXXXX" (de "011...") o "5499XXXXXXXXXX" (de "9 11...")
+  // "5490…", "5499…" o "54…" sin el 9 móvil.
   const rows = await col
     .find(
       {
         customerPhoneDigits: {
-          $regex: "^(5490|5499)",
+          $regex: "^(5490|5499|54(?!9))",
         },
       },
       { projection: { _id: 1, customerPhone: 1 } },
