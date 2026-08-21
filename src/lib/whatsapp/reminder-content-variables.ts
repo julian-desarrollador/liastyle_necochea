@@ -10,9 +10,9 @@ export type ReminderTemplateVariables = {
   hora: string;
 };
 
-/** Ejemplo: `Viernes 14/08/2026`, como espera `{{3}}` en la plantilla aprobada. */
+/** Ejemplo: `Sábado 22/08`, como espera `{{3}}` en la plantilla aprobada. */
 export function formatReminderDayAndDate(startsAt: Date): string {
-  const value = formatInTimeZone(startsAt, SALON_TIME_ZONE, "EEEE dd/MM/yyyy", {
+  const value = formatInTimeZone(startsAt, SALON_TIME_ZONE, "EEEE dd/MM", {
     locale: es,
   });
   return value.charAt(0).toLocaleUpperCase("es-AR") + value.slice(1);
