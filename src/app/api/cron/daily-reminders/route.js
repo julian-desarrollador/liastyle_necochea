@@ -70,10 +70,17 @@ export async function GET(request) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const contentSid = process.env.TWILIO_REMINDER_NEW_CONTENT_SID?.trim();
-    if (!contentSid) {
+    const newContentSid = process.env.TWILIO_REMINDER_NEW_CONTENT_SID?.trim();
+    const vipContentSid = process.env.TWILIO_REMINDER_VIP_CONTENT_SID?.trim();
+    if (!newContentSid) {
       return NextResponse.json(
         { error: "Falta variable de entorno: TWILIO_REMINDER_NEW_CONTENT_SID" },
+        { status: 500 },
+      );
+    }
+    if (!vipContentSid) {
+      return NextResponse.json(
+        { error: "Falta variable de entorno: TWILIO_REMINDER_VIP_CONTENT_SID" },
         { status: 500 },
       );
     }
@@ -115,10 +122,11 @@ export async function GET(request) {
     );
 
     let sent = 0;
+    let sentNew = 0;
+    let sentVip = 0;
     let errors = 0;
     let logErrors = 0;
     let ambiguousErrors = 0;
-    let skippedVip = 0;
 
     for (const reservation of reservations) {
       const reservationId = reservation._id.toHexString();
@@ -131,7 +139,7 @@ export async function GET(request) {
             to: reservation.customerPhone ?? "",
             sid: null,
             status: "failed",
-            template: contentSid,
+            template: newContentSid,
             error: "Teléfono inválido para clasificar o enviar.",
           });
         } catch (logError) {
@@ -144,10 +152,8 @@ export async function GET(request) {
         continue;
       }
 
-      if (vipStatusByPhone.get(canonical)?.isVip) {
-        skippedVip += 1;
-        continue;
-      }
+      const isVip = Boolean(vipStatusByPhone.get(canonical)?.isVip);
+      const contentSid = isVip ? vipContentSid : newContentSid;
 
       let contentVariablesJson;
       let templateVariables;
@@ -257,6 +263,8 @@ export async function GET(request) {
       }
 
       sent += 1;
+      if (isVip) sentVip += 1;
+      else sentNew += 1;
       let stateAssociated = false;
       let stateError = null;
       for (let attempt = 0; attempt < 3 && !stateAssociated; attempt += 1) {
@@ -310,7 +318,8 @@ export async function GET(request) {
       dateKey,
       candidates: reservations.length,
       sent,
-      skippedVip,
+      sentNew,
+      sentVip,
       errors,
       ambiguousErrors,
       logErrors,

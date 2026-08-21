@@ -1,7 +1,9 @@
 # Twilio WhatsApp — checklist de producción
 
-Este flujo envía `recordatorio_turno_lia_nuevas_clientas` a turnos del día siguiente
-de clientas no VIP. Las respuestas `Confirmar` y `Cancelar` llegan al webhook de Lia Style.
+Este flujo envía recordatorios del día siguiente por WhatsApp:
+`recordatorio_turno_lia_nuevas_clientas` a clientas no VIP y
+`recordatorio_turno_vip_lia` a clientas VIP. Las respuestas `Confirmar` y
+`Cancelar` llegan al webhook de Lia Style.
 
 ## 1. Variables en Vercel (Production)
 
@@ -12,6 +14,8 @@ Configurar estos valores en **Project Settings → Environment Variables → Pro
 - `TWILIO_WHATSAPP_FROM`: sender aprobado, por ejemplo `whatsapp:+54...`.
 - `TWILIO_REMINDER_NEW_CONTENT_SID`: Content SID (`HX...`) de
   `recordatorio_turno_lia_nuevas_clientas`.
+- `TWILIO_REMINDER_VIP_CONTENT_SID`: Content SID (`HX...`) de
+  `recordatorio_turno_vip_lia`.
 - `TWILIO_WEBHOOK_PUBLIC_URL`: URL completa y exacta, por ejemplo
   `https://DOMINIO/api/webhooks/twilio/whatsapp`.
 - `APP_BASE_URL`: dominio público sin barra final, por ejemplo `https://DOMINIO`.
@@ -46,7 +50,7 @@ con la pública, incluyendo `https`, dominio y path.
 - tengan pago aprobado o no requieran pago;
 - hayan aceptado WhatsApp;
 - no tengan un recordatorio previo;
-- correspondan a una clienta no VIP.
+- correspondan a una clienta no VIP (plantilla nuevas) o VIP (plantilla VIP).
 
 La marca `waReminder24hSentAt` se reclama antes del envío y se revierte si Twilio falla.
 
@@ -65,6 +69,7 @@ Debe responder `ok: true` y:
 - `hasAuthToken: true`
 - `hasFrom: true`
 - `hasNewClientContentSid: true`
+- `hasVipContentSid: true`
 - `hasWebhookPublicUrl: true`
 - `hasAppBaseUrl: true`
 - al menos un sender visible y online
@@ -80,12 +85,9 @@ Los SID y números se muestran enmascarados.
 5. Probar **Cancelar** con un turno a más de 24 h: debe cancelar el turno.
 6. Probar **Cancelar** con menos de 24 h: debe conservarlo y responder con la política.
 7. Reprogramar un turno: debe limpiar recordatorio y asistencia para permitir un envío nuevo.
+8. Probar una clienta VIP (manual o ≥10 visitas): el JSON del cron debe incluir `sentVip` ≥ 1
+   y el mensaje debe ser la plantilla VIP.
 
 Solo los quick replies con IDs exactos `confirmar` y `cancelar`, asociados al SID del
 recordatorio vigente, pueden modificar un turno. Escribir esas palabras como texto libre
 no confirma ni cancela.
-
-## 6. Próxima etapa
-
-Cuando la plantilla VIP esté aprobada, agregar `TWILIO_REMINDER_VIP_CONTENT_SID` y
-extender el cron para elegir el SID según `resolveVipStatus`.

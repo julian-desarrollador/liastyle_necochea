@@ -18,6 +18,7 @@ export async function GET(request) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID ?? "";
   const fromConfigured = process.env.TWILIO_WHATSAPP_FROM ?? "";
   const contentSid = process.env.TWILIO_REMINDER_NEW_CONTENT_SID ?? "";
+  const vipContentSid = process.env.TWILIO_REMINDER_VIP_CONTENT_SID ?? "";
 
   try {
     const client = getTwilioClient();
@@ -38,6 +39,7 @@ export async function GET(request) {
       fromConfigured: mask(fromConfigured),
       fromResolved: mask(resolvedFrom),
       contentSid: mask(contentSid),
+      vipContentSid: mask(vipContentSid),
       onlineSenders: senderRows
         .filter((sender) => String(sender.status).toUpperCase() === "ONLINE")
         .map((sender) => mask(sender.senderId)),
@@ -46,6 +48,7 @@ export async function GET(request) {
         hasAuthToken: Boolean(process.env.TWILIO_AUTH_TOKEN?.trim()),
         hasFrom: Boolean(fromConfigured.trim()),
         hasNewClientContentSid: Boolean(contentSid.trim()),
+        hasVipContentSid: Boolean(vipContentSid.trim()),
         hasWebhookPublicUrl: Boolean(process.env.TWILIO_WEBHOOK_PUBLIC_URL?.trim()),
         hasAppBaseUrl: Boolean(
           process.env.APP_BASE_URL?.trim() ||
@@ -61,6 +64,7 @@ export async function GET(request) {
         accountSid: mask(accountSid),
         fromConfigured: mask(fromConfigured),
         contentSid: mask(contentSid),
+        vipContentSid: mask(vipContentSid),
         error: error instanceof Error ? error.message : "Error desconocido",
       },
       { status: 500 },
