@@ -9,15 +9,8 @@ import { agendaBlockAppliesToDateKey } from "@/lib/booking/agenda-blocks-shared"
 import type { ReprogramDayRow } from "@/lib/booking/panel-reprogram-day-rows";
 import { PANEL_WEEK_LETTERS, buildPanelMonthGrid, panelMonthTitle } from "@/lib/booking/panel-month-grid";
 import { argentinaTodayDateKey, minPublicBookableDateKey } from "@/lib/booking/public-slot-lead";
-import {
-  panelBackBtn,
-  panelCard,
-  panelDayDefault,
-  panelDayOutside,
-  panelDaySelected,
-  panelPage,
-  panelPrimaryBtn,
-} from "@/components/panel/panel-ui";
+import { panelBackBtn, panelCard, panelDayDefault, panelDayOutside, panelDaySelected, panelPage, panelPrimaryBtn } from "@/components/panel/panel-ui";
+import { PanelSobreturnoConfirm } from "@/components/panel/panel-sobreturno-confirm";
 import { perfilBackBtn } from "@/components/perfil/perfil-ui";
 
 export type ReprogramarVariant = "customer" | "panel";
@@ -92,6 +85,7 @@ export function ReprogramarTurnoClient({
   const [timeLocal, setTimeLocal] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sobreturnoOpen, setSobreturnoOpen] = useState(false);
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
@@ -189,6 +183,7 @@ export function ReprogramarTurnoClient({
   useEffect(() => {
     setTimeLocal("");
     setSaveError(null);
+    setSobreturnoOpen(false);
   }, [dateKey]);
 
   useEffect(() => {
@@ -265,7 +260,16 @@ export function ReprogramarTurnoClient({
     return () => document.removeEventListener("pointerdown", handlePointerDown, true);
   }, [dayPickerOpen]);
 
-  async function handleSave() {
+  const selectedSlotRow = slotRows?.find((row) => row.timeLocal === timeLocal) ?? null;
+  const selectedIsSobreturno =
+    variant === "panel" &&
+    (selectedSlotRow?.kind === "reserved" || selectedSlotRow?.kind === "capacity_full");
+  const sobreturnoDetail =
+    selectedSlotRow?.kind === "reserved"
+      ? `Este horario ya tiene a ${selectedSlotRow.customerName} (${selectedSlotRow.treatmentName}). Podés mover el turno igual.`
+      : "Este horario ya no tiene cupo. Podés mover el turno igual (sobreturno).";
+
+  async function submitSave() {
     if (!reservation || !timeLocal) return;
     setSaving(true);
     setSaveError(null);
@@ -292,7 +296,17 @@ export function ReprogramarTurnoClient({
       setSaveError("Sin conexión.");
     } finally {
       setSaving(false);
+      setSobreturnoOpen(false);
     }
+  }
+
+  function handleSave() {
+    if (!reservation || !timeLocal) return;
+    if (selectedIsSobreturno) {
+      setSobreturnoOpen(true);
+      return;
+    }
+    void submitSave();
   }
 
   const movable = reservation ? canRescheduleStatus(reservation.reservationStatus) : false;
@@ -588,6 +602,28 @@ export function ReprogramarTurnoClient({
                     );
                   }
                   if (row.kind === "reserved") {
+                    if (variant === "panel") {
+                      return (
+                        <li key={row.timeLocal}>
+                          <button
+                            type="button"
+                            onClick={() => setTimeLocal(row.timeLocal)}
+                            className={[
+                              "w-full cursor-pointer rounded-xl border px-3.5 py-2.5 text-left text-[13px] transition",
+                              timeLocal === row.timeLocal
+                                ? "border-amber-500 bg-amber-50 text-amber-950"
+                                : "border-amber-200 bg-amber-50/70 text-gray-800 hover:bg-amber-50",
+                            ].join(" ")}
+                          >
+                            <span className="font-mono tabular-nums font-semibold">{row.timeLocal}</span>
+                            <span className="ml-2 text-[12px] font-medium text-amber-800">Sobreturno</span>
+                            <span className="mt-1 block text-[12px] leading-snug text-gray-600">
+                              Ya está {row.customerName} · {row.treatmentName}. Podés cargar igual.
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    }
                     return (
                       <li
                         key={row.timeLocal}
@@ -615,7 +651,26 @@ export function ReprogramarTurnoClient({
                       </li>
                     );
                   }
-                  return (
+                  return variant === "panel" ? (
+                    <li key={row.timeLocal}>
+                      <button
+                        type="button"
+                        onClick={() => setTimeLocal(row.timeLocal)}
+                        className={[
+                          "w-full cursor-pointer rounded-xl border px-3.5 py-2.5 text-left text-[13px] transition",
+                          timeLocal === row.timeLocal
+                            ? "border-amber-500 bg-amber-50 text-amber-950"
+                            : "border-amber-200 bg-amber-50/70 text-gray-800 hover:bg-amber-50",
+                        ].join(" ")}
+                      >
+                        <span className="font-mono tabular-nums font-semibold">{row.timeLocal}</span>
+                        <span className="ml-2 text-[12px] font-medium text-amber-800">Sobreturno</span>
+                        <span className="mt-1 block text-[12px] leading-snug text-gray-600">
+                          Sin cupo en esta franja. Podés cargar igual.
+                        </span>
+                      </button>
+                    </li>
+                  ) : (
                     <li
                       key={row.timeLocal}
                       className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-[13px] text-gray-500"
@@ -635,6 +690,15 @@ export function ReprogramarTurnoClient({
             </p>
           ) : null}
 
+          {selectedIsSobreturno ? (
+            <p
+              role="status"
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-amber-900"
+            >
+              {sobreturnoDetail}
+            </p>
+          ) : null}
+
           <button
             ref={confirmButtonRef}
             type="button"
@@ -651,6 +715,15 @@ export function ReprogramarTurnoClient({
         </div>
       ) : null}
     </main>
+    <PanelSobreturnoConfirm
+      open={sobreturnoOpen}
+      title="Este horario ya tiene otra clienta"
+      detail={sobreturnoDetail}
+      confirmLabel="Mover igual"
+      busy={saving}
+      onCancel={() => setSobreturnoOpen(false)}
+      onConfirm={() => void submitSave()}
+    />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BookingCategoryStep } from "@/components/booking/booking-category-step";
 import { BookingPicker } from "@/components/booking/booking-picker";
+import { PanelSobreturnoConfirm } from "@/components/panel/panel-sobreturno-confirm";
 import { panelInput, panelLabel, panelPrimaryBtn } from "@/components/panel/panel-ui";
 import { BOOKING_STEP_HINTS } from "@/lib/booking/category-cards";
 import {
@@ -36,6 +37,8 @@ export function PanelNuevoTurnoClient() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [remoteSlots, setRemoteSlots] = useState<string[] | null | undefined>(undefined);
+  const [overCapacitySlots, setOverCapacitySlots] = useState<string[]>([]);
+  const [sobreturnoOpen, setSobreturnoOpen] = useState(false);
   const [openModalCategory, setOpenModalCategory] = useState<TreatmentCategory | null>(null);
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [serviceModalDismissNonce, setServiceModalDismissNonce] = useState(0);
@@ -194,6 +197,7 @@ export function PanelNuevoTurnoClient() {
   useEffect(() => {
     if (!selectedDate || selectedServiceIds.length === 0) {
       setRemoteSlots(undefined);
+      setOverCapacitySlots([]);
       return;
     }
     let cancelled = false;
@@ -206,13 +210,17 @@ export function PanelNuevoTurnoClient() {
     });
     fetch(`/api/booking/slots?${q.toString()}`, { credentials: "same-origin" })
       .then((res) => res.json())
-      .then((data: { slots?: string[] }) => {
+      .then((data: { slots?: string[]; overCapacitySlots?: string[] }) => {
         if (!cancelled) {
           setRemoteSlots(Array.isArray(data.slots) ? data.slots : []);
+          setOverCapacitySlots(Array.isArray(data.overCapacitySlots) ? data.overCapacitySlots : []);
         }
       })
       .catch(() => {
-        if (!cancelled) setRemoteSlots([]);
+        if (!cancelled) {
+          setRemoteSlots([]);
+          setOverCapacitySlots([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -224,6 +232,7 @@ export function PanelNuevoTurnoClient() {
     if (remoteSlots === undefined || remoteSlots === null) return;
     if (!remoteSlots.includes(selectedTime)) {
       setSelectedTime("");
+      setSobreturnoOpen(false);
     }
   }, [selectedDate, selectedTime, selectedServiceIds, remoteSlots]);
 
@@ -266,7 +275,7 @@ export function PanelNuevoTurnoClient() {
     return () => cancelAnimationFrame(id);
   }, [hasSlot, selectedTime]);
 
-  async function handleConfirmTurno() {
+  async function submitTurno() {
     if (!primaryService || selectedServices.length === 0 || !selectedDate || !selectedTime || !datosComplete) {
       return;
     }
@@ -301,7 +310,19 @@ export function PanelNuevoTurnoClient() {
       setConfirmError("Sin conexión o error de red. Probá de nuevo.");
     } finally {
       setSubmitting(false);
+      setSobreturnoOpen(false);
     }
+  }
+
+  function handleConfirmTurno() {
+    if (!primaryService || selectedServices.length === 0 || !selectedDate || !selectedTime || !datosComplete) {
+      return;
+    }
+    if (overCapacitySlots.includes(selectedTime)) {
+      setSobreturnoOpen(true);
+      return;
+    }
+    void submitTurno();
   }
 
   const bookingPickerProps = {
@@ -316,6 +337,7 @@ export function PanelNuevoTurnoClient() {
     selectedTime,
     onTimeChange: setSelectedTime,
     remoteTimeSlots: selectedDate && selectedServiceIds.length > 0 ? (remoteSlots ?? null) : undefined,
+    overCapacityTimes: selectedDate && selectedServiceIds.length > 0 ? overCapacitySlots : [],
     selectedCountLabel:
       selectedServices.length > 0
         ? `${selectedServices.length} servicio${selectedServices.length === 1 ? "" : "s"}`
@@ -560,6 +582,14 @@ export function PanelNuevoTurnoClient() {
                   <span>Confirmá para agendar el turno</span>
                 </div>
               )}
+              {selectedTime && overCapacitySlots.includes(selectedTime) ? (
+                <p
+                  role="status"
+                  className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12px] leading-snug text-amber-900"
+                >
+                  Este horario ya tiene otra clienta. Podés cargar el sobreturno igual.
+                </p>
+              ) : null}
               <p className="mt-3 text-[11px] leading-snug text-[#7f7c7a]">
                 Alta manual desde el panel. Podés cambiar fecha u horario arriba si necesitás otro servicio.
               </p>
@@ -589,6 +619,13 @@ export function PanelNuevoTurnoClient() {
           </div>
         ) : null}
       </main>
+      <PanelSobreturnoConfirm
+        open={sobreturnoOpen}
+        detail={`Este horario (${selectedTime}) ya tiene otra clienta. Podés cargar el sobreturno igual.`}
+        busy={submitting}
+        onCancel={() => setSobreturnoOpen(false)}
+        onConfirm={() => void submitTurno()}
+      />
     </div>
   );
 }

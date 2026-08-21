@@ -1,7 +1,7 @@
 ﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { computeBookableSlots, computeBookableSlotsForTreatmentIds } from "@/lib/booking/compute-bookable-slots";
+import { computeBookableSlotsDetailed, computeBookableSlotsForTreatmentIdsDetailed } from "@/lib/booking/compute-bookable-slots";
 import { getDb } from "@/lib/mongodb";
 import { verifyPanelCookie } from "@/lib/panel-turnos-auth";
 import { validateServiceCombo } from "@/lib/treatments/booking-rules";
@@ -56,23 +56,29 @@ export async function GET(request: Request) {
 
   try {
     const db = await getDb();
-    const slots =
+    const allowOverCapacity = scope === "panel";
+    const result =
       serviceIds.length > 0
-        ? await computeBookableSlotsForTreatmentIds(db, {
+        ? await computeBookableSlotsForTreatmentIdsDetailed(db, {
             dateKey,
             treatmentIds: serviceIds,
             now: new Date(),
             scope,
             excludeReservationHexId: scope === "panel" ? excludeReservationHexId || undefined : undefined,
+            allowOverCapacity,
           })
-        : await computeBookableSlots(db, {
+        : await computeBookableSlotsDetailed(db, {
             dateKey,
             treatmentId,
             now: new Date(),
             scope,
             excludeReservationHexId: scope === "panel" ? excludeReservationHexId || undefined : undefined,
+            allowOverCapacity,
           });
-    return NextResponse.json({ slots });
+    return NextResponse.json({
+      slots: result.slots,
+      overCapacitySlots: result.overCapacitySlots,
+    });
   } catch (e) {
     console.error("[api/booking/slots]", e);
     return NextResponse.json({ error: "No se pudieron cargar los horarios." }, { status: 500 });

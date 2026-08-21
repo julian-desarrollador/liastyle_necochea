@@ -66,12 +66,14 @@ export async function GET(request: Request) {
                 treatmentIds: serviceIds,
                 now,
                 scope,
+                allowOverCapacity: scope === "panel",
               })
             : await computeBookableSlots(db, {
                 dateKey,
                 treatmentId,
                 now,
                 scope,
+                allowOverCapacity: scope === "panel",
               });
         return [dateKey, slots.length > 0] as const;
       }),

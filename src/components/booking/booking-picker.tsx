@@ -47,6 +47,8 @@ export type BookingPickerProps = {
    * `undefined`: usar `resolveTimeSlots` / plantilla. `null`: cargando.
    */
   remoteTimeSlots?: string[] | null;
+  /** Horarios visibles en panel que ya no tienen cupo (sobreturno). */
+  overCapacityTimes?: string[];
   /** `public`: reglas y textos de reserva web. `panel`: alta manual sin tope de “desde mañana”. */
   bookingContext?: "public" | "panel";
   bookingFocusRef?: React.RefObject<HTMLDivElement | null>;
@@ -91,6 +93,7 @@ export function BookingPicker({
   onTimeChange,
   resolveTimeSlots,
   remoteTimeSlots,
+  overCapacityTimes = [],
   bookingContext = "public",
   bookingFocusRef,
   treatmentFirstHintVisible,
@@ -1039,20 +1042,32 @@ export function BookingPicker({
             ) : availableTimes.length > 0 ? (
               availableTimes.map((time) => {
                 const isActive = time === selectedTime;
+                const isOverCapacity = overCapacityTimes.includes(time);
                 return (
                   <button
                     key={time}
                     type="button"
                     onClick={() => onTimeChange(time)}
-                    className={`h-11 cursor-pointer rounded-xl border text-[16px] transition-colors ${
+                    className={`min-h-11 cursor-pointer rounded-xl border px-2 py-1.5 text-[16px] transition-colors ${
                       isActive
-                        ? "border-[var(--premium-gold-light)] bg-[var(--premium-gold)]/15 text-[var(--premium-gold-light)]"
-                        : isLight
-                          ? "border-[var(--outline)]/15 bg-white text-[#1c1b1b]"
-                          : "border-white/8 bg-[#151515] text-[var(--soft-gray)]"
+                        ? isOverCapacity
+                          ? "border-amber-500 bg-amber-50 text-amber-900"
+                          : "border-[var(--premium-gold-light)] bg-[var(--premium-gold)]/15 text-[var(--premium-gold-light)]"
+                        : isOverCapacity
+                          ? isLight
+                            ? "border-amber-300 bg-amber-50/80 text-amber-900"
+                            : "border-amber-400/40 bg-amber-500/10 text-amber-100"
+                          : isLight
+                            ? "border-[var(--outline)]/15 bg-white text-[#1c1b1b]"
+                            : "border-white/8 bg-[#151515] text-[var(--soft-gray)]"
                     }`}
                   >
-                    {time}
+                    <span className="block leading-tight">{time}</span>
+                    {isOverCapacity ? (
+                      <span className="mt-0.5 block text-[10px] font-semibold tracking-wide uppercase opacity-80">
+                        Sobreturno
+                      </span>
+                    ) : null}
                   </button>
                 );
               })

@@ -448,12 +448,14 @@ async function validatePanelReservation(
           treatmentIds: serviceItems.map((s) => s.treatmentId),
           now,
           scope: "panel",
+          allowOverCapacity: true,
         })
       : await computeBookableSlots(db, {
           dateKey,
           treatmentId: primaryTreatment.id,
           now,
           scope: "panel",
+          allowOverCapacity: true,
         });
   if (!allowedTimes.includes(timeLocal)) {
     return { ok: false, error: "Ese horario no está disponible.", code: "SLOT_UNAVAILABLE" };
@@ -463,20 +465,12 @@ async function validatePanelReservation(
   if (!interval) {
     return { ok: false, error: "Fecha u horario inválidos.", code: "INVALID_SLOT" };
   }
-  const capGetterPanel = await buildCapGetterForDate(db, dateKey);
-  if (await reservationWouldExceedSalonCapacity(db, dateKey, interval, capGetterPanel)) {
-    return {
-      ok: false,
-      error: "Ese horario ya no tiene cupo en esa franja. Elegí otro.",
-      code: "SLOT_OVERLAP",
-    };
-  }
 
   return { ok: true, startsAt, now, primaryTreatment, serviceItems, totalDurationMinutes, isCombo };
 }
 
 /**
- * Alta manual desde el panel (sin Mercado Pago). Valida cupos (9–11:30: hasta 3 turnos solapados).
+ * Alta manual desde el panel (sin Mercado Pago). Permite sobreturno (cupo excedido).
  */
 export async function insertPanelReservation(
   db: Db,
@@ -649,6 +643,7 @@ export async function rescheduleReservation(
     now: input.now,
     scope: slotScope,
     excludeReservationHexId: hex,
+    allowOverCapacity: input.actor === "panel",
   });
   if (!allowed.includes(newTime)) {
     return { error: "Ese horario no está disponible para este servicio.", code: "SLOT_UNAVAILABLE" };
@@ -665,12 +660,14 @@ export async function rescheduleReservation(
   if (!interval) {
     return { error: "Fecha u horario inválidos.", code: "INVALID_SLOT" };
   }
-  const capGetter = await buildCapGetterForDate(db, newKey);
-  if (await reservationWouldExceedSalonCapacity(db, newKey, interval, capGetter, excludeOid)) {
-    return {
-      error: "Ese horario ya no está disponible (cupos llenos en esa franja).",
-      code: "SLOT_OVERLAP",
-    };
+  if (input.actor !== "panel") {
+    const capGetter = await buildCapGetterForDate(db, newKey);
+    if (await reservationWouldExceedSalonCapacity(db, newKey, interval, capGetter, excludeOid)) {
+      return {
+        error: "Ese horario ya no está disponible (cupos llenos en esa franja).",
+        code: "SLOT_OVERLAP",
+      };
+    }
   }
 
   const displayDate = formatSalonDisplayDate(newKey);

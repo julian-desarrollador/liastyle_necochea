@@ -139,6 +139,20 @@ export function canPlaceReservationSlot(
   return true;
 }
 
+/** True si en algún tramo del intervalo el cupo efectivo es 0 (bloqueo de salón / sillas). */
+export function intervalHasZeroEffectiveCap(
+  dateKey: string,
+  candidate: IntervalMs,
+  getEffectiveCap?: (instantMs: number) => number,
+): boolean {
+  const capAt = getEffectiveCap ?? ((ms: number) => salonConcurrentCapAtInstant(dateKey, ms));
+  const step = 15 * 60_000;
+  for (let t = candidate.startMs; t < candidate.endMs; t += step) {
+    if (capAt(t + 1) <= 0) return true;
+  }
+  return capAt(Math.max(candidate.startMs, candidate.endMs - 1)) <= 0;
+}
+
 export function filterSlotsBySalonCapacity(
   slots: string[],
   dateKey: string,
@@ -150,6 +164,21 @@ export function filterSlotsBySalonCapacity(
     const slot = slotIntervalMs(dateKey, timeLocal, durationMinutes);
     if (!slot) return false;
     return canPlaceReservationSlot(dateKey, slot, busy, getEffectiveCap);
+  });
+}
+
+/** Horarios que siguen en grilla pero ya no tienen cupo (sobreturno). */
+export function slotsExceedingSalonCapacity(
+  slots: string[],
+  dateKey: string,
+  durationMinutes: number,
+  busy: IntervalMs[],
+  getEffectiveCap?: (instantMs: number) => number,
+): string[] {
+  return slots.filter((timeLocal) => {
+    const slot = slotIntervalMs(dateKey, timeLocal, durationMinutes);
+    if (!slot) return false;
+    return !canPlaceReservationSlot(dateKey, slot, busy, getEffectiveCap);
   });
 }
 
