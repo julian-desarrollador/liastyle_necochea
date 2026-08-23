@@ -4,10 +4,9 @@
 export const CAMBIO_ESTRUCTURA_INTRO = "Química capilar : Alisado o Permanente";
 
 /**
- * Analia agrupa esta categoría como "Servicios químicos · Cambio de estructura".
- * En la UI eso va en la card del paso 1 (título + subtítulo), no repetido adentro.
+ * Subtítulo de la card de portada (paso 1 de /turnos y /servicios).
  */
-export const CAMBIO_ESTRUCTURA_CARD_SUBTITLE = "Servicios químicos";
+export const CAMBIO_ESTRUCTURA_CARD_SUBTITLE = "Alisado - Permanentación";
 
 export type CambioEstructuraBookingGroup = {
   id: string;
