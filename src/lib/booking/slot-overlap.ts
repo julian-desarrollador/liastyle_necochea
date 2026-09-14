@@ -153,20 +153,21 @@ export async function loadConfirmedCapacityRows(db: Db, dateKey: string): Promis
     .find(
       { dateKey, reservationStatus: "confirmed" },
       {
-        projection: { startsAt: 1, durationMinutes: 1, treatmentId: 1, mpPaymentApprovedAt: 1 },
+        projection: { startsAt: 1, durationMinutes: 1, treatmentId: 1, mpPaymentApprovedAt: 1, createdAt: 1 },
       },
     )
     .toArray();
 
   return rows.map((r) => {
-    const approvedAt =
-      r.mpPaymentApprovedAt instanceof Date ? r.mpPaymentApprovedAt.getTime() : Number.MAX_SAFE_INTEGER;
+    const paidAt = r.mpPaymentApprovedAt instanceof Date ? r.mpPaymentApprovedAt.getTime() : null;
+    const createdAt = r.createdAt instanceof Date ? r.createdAt.getTime() : 0;
+    const approvedAtMs = paidAt ?? createdAt;
     return {
       id: r._id as ObjectId,
       interval: intervalFromReservationRow(
         r as { startsAt?: unknown; durationMinutes?: unknown; treatmentId?: unknown },
       ),
-      approvedAtMs: Number.isFinite(approvedAt) ? approvedAt : Number.MAX_SAFE_INTEGER,
+      approvedAtMs: Number.isFinite(approvedAtMs) ? approvedAtMs : 0,
     };
   });
 }
@@ -177,7 +178,7 @@ function confirmSeatRank(approvedAtMs: number, id: ObjectId): string {
 
 /**
  * Tras confirmar un pago: ¿esta reserva se queda con el cupo, o otra ya confirmada tiene prioridad?
- * Gana quien pagó antes (mpPaymentApprovedAt); empate por `_id`.
+ * Gana quien confirmó antes (pago MP o, si no hay pago, `createdAt` del panel). Empate por `_id`.
  */
 export function selfKeepsConfirmedSeat(
   dateKey: string,

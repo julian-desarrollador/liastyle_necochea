@@ -884,6 +884,15 @@ async function refundApprovedPaymentAndMark(
   return refund.ok;
 }
 
+/** Reembolso automático solo si el cobro no correspondía a un turno que ya se había confirmado. */
+function shouldRefundApprovedPaymentOnCancelledReservation(reservation: ReservationDoc): boolean {
+  if (reservation.reservationStatus !== "cancelled") return false;
+  if (reservation.paymentStatus === "refunded") return false;
+  if (reservation.cancelledBy === "system") return true;
+  if (reservation.cancelReason === "payment_deadline_expired") return true;
+  return reservation.paymentStatus === "pending" || reservation.paymentStatus === "failed";
+}
+
 async function releasePendingAfterUnusablePayment(
   db: Db,
   reservation: ReservationDoc,
@@ -958,7 +967,7 @@ export async function tryConfirmReservationFromMpPayment(
   }
 
   if (reservation.reservationStatus !== "pending_payment") {
-    if (reservation.reservationStatus === "cancelled" && reservation.paymentStatus !== "refunded") {
+    if (shouldRefundApprovedPaymentOnCancelledReservation(reservation)) {
       const refunded = await refundApprovedPaymentAndMark(db, reservation, paymentIdStr);
       return {
         outcome: "ignored",
