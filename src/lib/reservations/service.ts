@@ -51,10 +51,13 @@ export function computeStartsAtUtc(dateKey: string, timeLocal: string): Date | n
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** Tiempo que un “Esperando pago” ocupa el horario si no se configura otra cosa. */
+const DEFAULT_PENDING_TTL_MINUTES = 60;
+
 function pendingTtlMs(): number {
   const raw = process.env.PENDING_RESERVATION_TTL_MINUTES;
-  const n = raw ? Number(raw) : 60;
-  if (!Number.isFinite(n) || n < 5 || n > 10080) return 60 * 60 * 1000;
+  const n = raw ? Number(raw) : DEFAULT_PENDING_TTL_MINUTES;
+  if (!Number.isFinite(n) || n < 5 || n > 10080) return DEFAULT_PENDING_TTL_MINUTES * 60 * 1000;
   return n * 60 * 1000;
 }
 
