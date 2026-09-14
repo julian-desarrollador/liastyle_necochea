@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="fonts.css" />
+  <style>
+    body { background: #141313; color: #f4efe8; }
+    .frame { position: relative; width: 1080px; height: 1920px; overflow: hidden; }
+    .frame img.bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 18%;
+    }
+    .veil {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(20,19,19,0.22) 0%, rgba(20,19,19,0.08) 32%, rgba(20,19,19,0.55) 58%, rgba(20,19,19,0.96) 100%);
+    }
+    .safe {
+      position: relative;
+      z-index: 2;
+      height: 1920px;
+      padding: 200px 78px 230px;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+    .pill {
+      align-self: flex-start;
+      padding: 12px 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.28);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #d5e4f1;
+      background: rgba(20,19,19,0.28);
+    }
+    h1 {
+      margin-top: auto;
+      font-size: 78px;
+      font-weight: 600;
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+    }
+    .sub {
+      margin: 26px 0 0;
+      font-size: 30px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: rgba(244,239,232,0.88);
+    }
+    .cta {
+      margin-top: 42px;
+      padding: 30px 28px;
+      border-radius: 999px;
+      background: #7da3c4;
+      color: #1f1814;
+      text-align: center;
+      font-size: 34px;
+      font-weight: 700;
+    }
+    .foot {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(244,239,232,0.62);
+    }
+  </style>
+</head>
+<body class="story">
+  <div class="frame">
+    <img class="bg" src="assets/analia-recepcion.jpg" alt="" />
+    <div class="veil"></div>
+    <div class="safe">
+      <p class="sans pill">Lia Style Necochea</p>
+      <h1 class="serif">Ahora reservás<br>sin esperarme</h1>
+      <p class="sans sub">Entrá, elegí tu día y horario,<br>y listo. Las 24 hs.</p>
+      <div class="sans cta">liastylenecochea.com</div>
+      <p class="sans foot">Color · Corte · Peinado</p>
+    </div>
+  </div>
+</body>
+</html>
