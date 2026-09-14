@@ -5,6 +5,7 @@ import { listAgendaBlocksForCalendarMonth, type SalonAgendaBlockDoc } from "@/li
 import { getDb } from "@/lib/mongodb";
 import { verifyPanelCookie } from "@/lib/panel-turnos-auth";
 import { listReservationsForCalendarMonth } from "@/lib/reservations/admin-queries";
+import { expirePendingReservations } from "@/lib/reservations/service";
 import type { ReservationDoc } from "@/lib/reservations/types";
 
 function serialize(r: ReservationDoc) {
@@ -84,6 +85,13 @@ export async function GET(request: Request) {
 
   try {
     const db = await getDb();
+    // El cron diario puede tardar hasta 24 h: al abrir la agenda no deben quedar
+    // turnos "Esperando pago" ya vencidos.
+    try {
+      await expirePendingReservations(db);
+    } catch (e) {
+      console.error("[panel-turnos reservations GET] no se pudieron expirar pendientes", e);
+    }
     const [list, blocks] = await Promise.all([
       listReservationsForCalendarMonth(db, y, m),
       listAgendaBlocksForCalendarMonth(db, y, m),
