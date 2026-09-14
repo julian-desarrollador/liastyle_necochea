@@ -52,7 +52,18 @@ export function salonConcurrentCapAtInstant(dateKey: string, instantMs: number):
 }
 
 const COLLECTION = "reservations";
-const ACTIVE_STATUSES = ["confirmed"] as const;
+
+/**
+ * `holding`: confirmed + pending_payment vigente (el horario no se ofrece a otra clienta).
+ * `confirmed`: solo turnos ya pagados/confirmados (para decidir quién gana si dos pagan a la vez).
+ */
+export type SlotOccupancyMode = "holding" | "confirmed";
+
+export type ConfirmedCapacityRow = {
+  id: ObjectId;
+  interval: IntervalMs;
+  approvedAtMs: number;
+};
 
 export function reservationDurationMinutesFromDoc(r: {
   durationMinutes?: unknown;
@@ -73,29 +84,118 @@ function durationForReservationRow(r: {
   return reservationDurationMinutesFromDoc(r);
 }
 
-export async function loadBusyIntervalsMs(
-  db: Db,
+export function slotOccupancyMongoFilter(
+  occupancy: SlotOccupancyMode,
+  now = new Date(),
+): Record<string, unknown> {
+  if (occupancy === "confirmed") {
+    return { reservationStatus: "confirmed" };
+  }
+  return {
+    $or: [
+      { reservationStatus: "confirmed" },
+      {
+        reservationStatus: "pending_payment",
+        $or: [{ paymentDeadlineAt: { $gt: now } }, { paymentDeadlineAt: null }, { paymentDeadlineAt: { $exists: false } }],
+      },
+    ],
+  };
+}
+
+function occupancyQuery(
   dateKey: string,
+  occupancy: SlotOccupancyMode,
   excludeReservationId?: ObjectId,
-): Promise<IntervalMs[]> {
+  now = new Date(),
+): Record<string, unknown> {
   const filter: Record<string, unknown> = {
     dateKey,
-    reservationStatus: { $in: [...ACTIVE_STATUSES] },
+    ...slotOccupancyMongoFilter(occupancy, now),
   };
   if (excludeReservationId) {
     filter._id = { $ne: excludeReservationId };
   }
+  return filter;
+}
+
+function intervalFromReservationRow(r: {
+  startsAt?: unknown;
+  durationMinutes?: unknown;
+  treatmentId?: unknown;
+}): IntervalMs {
+  const startsAt = r.startsAt instanceof Date ? r.startsAt : new Date(String(r.startsAt));
+  const startMs = startsAt.getTime();
+  const dur = durationForReservationRow(r);
+  return { startMs, endMs: startMs + dur * 60_000 };
+}
+
+export async function loadBusyIntervalsMs(
+  db: Db,
+  dateKey: string,
+  excludeReservationId?: ObjectId,
+  occupancy: SlotOccupancyMode = "holding",
+): Promise<IntervalMs[]> {
   const rows = await db
     .collection(COLLECTION)
-    .find(filter, { projection: { startsAt: 1, durationMinutes: 1, treatmentId: 1 } })
+    .find(occupancyQuery(dateKey, occupancy, excludeReservationId), {
+      projection: { startsAt: 1, durationMinutes: 1, treatmentId: 1 },
+    })
+    .toArray();
+
+  return rows.map((r) =>
+    intervalFromReservationRow(r as { startsAt?: unknown; durationMinutes?: unknown; treatmentId?: unknown }),
+  );
+}
+
+export async function loadConfirmedCapacityRows(db: Db, dateKey: string): Promise<ConfirmedCapacityRow[]> {
+  const rows = await db
+    .collection(COLLECTION)
+    .find(
+      { dateKey, reservationStatus: "confirmed" },
+      {
+        projection: { startsAt: 1, durationMinutes: 1, treatmentId: 1, mpPaymentApprovedAt: 1 },
+      },
+    )
     .toArray();
 
   return rows.map((r) => {
-    const startsAt = r.startsAt instanceof Date ? r.startsAt : new Date(String(r.startsAt));
-    const startMs = startsAt.getTime();
-    const dur = durationForReservationRow(r as { durationMinutes?: unknown; treatmentId?: unknown });
-    return { startMs, endMs: startMs + dur * 60_000 };
+    const approvedAt =
+      r.mpPaymentApprovedAt instanceof Date ? r.mpPaymentApprovedAt.getTime() : Number.MAX_SAFE_INTEGER;
+    return {
+      id: r._id as ObjectId,
+      interval: intervalFromReservationRow(
+        r as { startsAt?: unknown; durationMinutes?: unknown; treatmentId?: unknown },
+      ),
+      approvedAtMs: Number.isFinite(approvedAt) ? approvedAt : Number.MAX_SAFE_INTEGER,
+    };
   });
+}
+
+function confirmSeatRank(approvedAtMs: number, id: ObjectId): string {
+  return `${String(approvedAtMs).padStart(16, "0")}:${id.toHexString()}`;
+}
+
+/**
+ * Tras confirmar un pago: ¿esta reserva se queda con el cupo, o otra ya confirmada tiene prioridad?
+ * Gana quien pagó antes (mpPaymentApprovedAt); empate por `_id`.
+ */
+export function selfKeepsConfirmedSeat(
+  dateKey: string,
+  selfId: ObjectId,
+  selfInterval: IntervalMs,
+  selfApprovedAtMs: number,
+  allConfirmed: ConfirmedCapacityRow[],
+  getEffectiveCap?: (instantMs: number) => number,
+): boolean {
+  const selfRank = confirmSeatRank(selfApprovedAtMs, selfId);
+  const earlierBusy = allConfirmed
+    .filter((row) => {
+      if (row.id.equals(selfId)) return false;
+      if (!intervalsOverlap(row.interval, selfInterval)) return false;
+      return confirmSeatRank(row.approvedAtMs, row.id) < selfRank;
+    })
+    .map((row) => row.interval);
+  return canPlaceReservationSlot(dateKey, selfInterval, earlierBusy, getEffectiveCap);
 }
 
 /**
@@ -188,7 +288,8 @@ export async function reservationWouldExceedSalonCapacity(
   candidate: IntervalMs,
   getEffectiveCap?: (instantMs: number) => number,
   excludeReservationId?: ObjectId,
+  occupancy: SlotOccupancyMode = "holding",
 ): Promise<boolean> {
-  const busy = await loadBusyIntervalsMs(db, dateKey, excludeReservationId);
+  const busy = await loadBusyIntervalsMs(db, dateKey, excludeReservationId, occupancy);
   return !canPlaceReservationSlot(dateKey, candidate, busy, getEffectiveCap);
 }

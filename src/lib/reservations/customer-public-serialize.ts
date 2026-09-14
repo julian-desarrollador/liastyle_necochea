@@ -1,4 +1,4 @@
-import type { ReservationDoc, ReservationSource, ReservationStatus } from "./types";
+import type { ReservationCancelledBy, ReservationDoc, ReservationSource, ReservationStatus } from "./types";
 
 export type CustomerReservationPublic = {
   id: string;
@@ -16,7 +16,7 @@ export type CustomerReservationPublic = {
   reservationStatus: ReservationStatus;
   paymentStatus: string;
   source: ReservationSource;
-  cancelledBy?: "panel" | "customer" | "whatsapp" | null;
+  cancelledBy?: ReservationCancelledBy | null;
 };
 
 export function serializeReservationForCustomer(r: ReservationDoc): CustomerReservationPublic {

@@ -206,6 +206,13 @@ export function MisTurnosClient() {
                     </span>
                   ) : null}
                 </div>
+                {r.reservationStatus === "cancelled" && r.cancelledBy === "system" ? (
+                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[15px] leading-snug text-amber-900">
+                    {r.paymentStatus === "refunded"
+                      ? "Ese horario ya no estaba disponible. Te devolvimos la seña."
+                      : "Ese horario ya no estaba disponible. La seña se está devolviendo."}
+                  </p>
+                ) : null}
                 {r.reservationStatus === "cancelled" && r.cancelledBy === "panel" ? (
                   <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[15px] leading-snug text-amber-900">
                     Este turno fue cancelado desde el panel del salón.

@@ -11,6 +11,7 @@ import {
   intervalsOverlap,
   reservationDurationMinutesFromDoc,
   slotIntervalMs,
+  slotOccupancyMongoFilter,
   type IntervalMs,
 } from "@/lib/booking/slot-overlap";
 import { findSalonTreatmentById } from "@/lib/treatments/catalog";
@@ -34,7 +35,7 @@ async function listActiveReservationsForDayDisplay(
 ): Promise<ReservationDoc[]> {
   const filter: Record<string, unknown> = {
     dateKey,
-    reservationStatus: "confirmed",
+    ...slotOccupancyMongoFilter("holding"),
   };
   if (excludeReservationId) {
     filter._id = { $ne: excludeReservationId };
@@ -95,7 +96,10 @@ export async function computeReprogramDayRows(
       if (!iv) return null;
       return {
         interval: iv,
-        customerName: String(r.customerName ?? "").trim() || "Cliente",
+        customerName:
+          r.reservationStatus === "pending_payment"
+            ? `${String(r.customerName ?? "").trim() || "Cliente"} · esperando pago`
+            : String(r.customerName ?? "").trim() || "Cliente",
         treatmentName: String(r.treatmentName ?? "").trim() || "Turno",
       };
     })

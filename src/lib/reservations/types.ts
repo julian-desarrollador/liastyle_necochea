@@ -16,7 +16,7 @@ export type PaymentStatus = "not_required" | "pending" | "simulated_paid" | "app
 
 export type ReservationSource = "app_turnos" | "panel";
 export type ReservationBookingMode = "single" | "combo";
-export type ReservationCancelledBy = "panel" | "customer" | "whatsapp";
+export type ReservationCancelledBy = "panel" | "customer" | "whatsapp" | "system";
 
 export type ReservationServiceItem = {
   treatmentId: string;

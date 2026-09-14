@@ -60,7 +60,11 @@ function reservationStatusChip(
           ? "Desde la web (cliente)"
           : cancelledBy === "whatsapp"
             ? "Desde WhatsApp"
-            : null;
+            : cancelledBy === "system"
+              ? reservation.paymentStatus === "refunded"
+                ? "Horario no disponible · seña devuelta"
+                : "Horario no disponible · revisar seña en Mercado Pago"
+              : null;
     return {
       badge: "Cancelada",
       badgeClass: "bg-gray-100 text-gray-700",

@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const siteOrigin = resolvePublicSiteOrigin(h);
   const metadataBase = new URL(`${siteOrigin}/`);
   /** Sin `?v=` en la URL: algunos scrapers de Meta fallan con query en og:image. */
-  const ogImageAbsolute = `${siteOrigin}/og-image-v3.jpg`;
+  const ogImageAbsolute = `${siteOrigin}/og-image-v4.jpg`;
 
   return {
     metadataBase,

@@ -86,6 +86,8 @@ async function main() {
   })
     .composite([{ input: logoBuf, gravity: "centre" }])
     .jpeg({ quality: 90, mozjpeg: true })
+    // Solo el logo. La preview que usa el sitio es og-image-v4.jpg
+    // (logo + "Reservá tu turno online"), generada por scripts/flyer-render.mjs.
     .toFile(path.join(outDir, "og-image-v3.jpg"));
 
   await sharp(path.join(outDir, "og-image-v3.jpg")).jpeg({ quality: 90, mozjpeg: true }).toFile(

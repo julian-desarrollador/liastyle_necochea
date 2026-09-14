@@ -11,7 +11,14 @@ import {
 import { formatSalonDisplayDate } from "@/lib/booking/salon-availability";
 import { canonicalPhoneDigitsAR, customerPhoneDigitsQueryValues } from "@/lib/customer/phone-canonical-ar";
 import { isPublicLeadTimeViolated } from "@/lib/booking/public-slot-lead";
-import { reservationWouldExceedSalonCapacity, slotIntervalMs } from "@/lib/booking/slot-overlap";
+import { refundMercadoPagoPayment } from "@/lib/mercadopago/refund-payment";
+import {
+  loadConfirmedCapacityRows,
+  reservationDurationMinutesFromDoc,
+  reservationWouldExceedSalonCapacity,
+  selfKeepsConfirmedSeat,
+  slotIntervalMs,
+} from "@/lib/booking/slot-overlap";
 import { validateServiceCombo } from "@/lib/treatments/booking-rules";
 import { SALON_TREATMENTS, findSalonTreatmentById, type SalonTreatment } from "@/lib/treatments/catalog";
 import { PUBLIC_DEPOSIT_RATE, summarizeDepositForTreatments } from "@/lib/treatments/deposit";
@@ -213,7 +220,7 @@ async function validatePublicTurnosReservation(
   if (await reservationWouldExceedSalonCapacity(db, input.dateKey, interval, capGetter)) {
     return {
       ok: false,
-      error: "Ese horario ya no está disponible (cupos llenos en esa franja).",
+      error: "Ese horario ya está reservado o esperando el pago de otra clienta.",
       code: "SLOT_OVERLAP",
     };
   }
@@ -664,7 +671,7 @@ export async function rescheduleReservation(
     const capGetter = await buildCapGetterForDate(db, newKey);
     if (await reservationWouldExceedSalonCapacity(db, newKey, interval, capGetter, excludeOid)) {
       return {
-        error: "Ese horario ya no está disponible (cupos llenos en esa franja).",
+        error: "Ese horario ya está reservado o esperando el pago de otra clienta.",
         code: "SLOT_OVERLAP",
       };
     }
@@ -847,9 +854,63 @@ export type MpPaymentPayload = {
   external_reference?: string | null;
 };
 
+async function refundApprovedPaymentAndMark(
+  db: Db,
+  reservation: ReservationDoc,
+  paymentIdStr: string,
+): Promise<boolean> {
+  const refund = await refundMercadoPagoPayment(
+    paymentIdStr,
+    `ls-refund-${reservation._id.toHexString()}-${paymentIdStr}`.slice(0, 64),
+  );
+  const now = new Date();
+  await db.collection(COLLECTION).updateOne(
+    { _id: reservation._id },
+    {
+      $set: {
+        mpPaymentId: paymentIdStr,
+        mpPaymentStatusLast: refund.ok ? "refunded" : "approved",
+        paymentStatus: refund.ok ? "refunded" : "approved",
+        updatedAt: now,
+      },
+    },
+  );
+  if (!refund.ok) {
+    console.error("[reservations] refund after payment without seat", refund.error, reservation._id.toHexString());
+  }
+  return refund.ok;
+}
+
+async function releasePendingAfterUnusablePayment(
+  db: Db,
+  reservation: ReservationDoc,
+  paymentIdStr: string,
+  cancelReason: string,
+): Promise<boolean> {
+  const now = new Date();
+  await db.collection(COLLECTION).updateOne(
+    { _id: reservation._id, reservationStatus: "pending_payment" },
+    {
+      $set: {
+        reservationStatus: "cancelled",
+        cancelledBy: "system",
+        cancelReason,
+        mpPaymentId: paymentIdStr,
+        mpPaymentStatusLast: "approved",
+        paymentStatus: "approved",
+        updatedAt: now,
+      },
+      $unset: { checkoutToken: "" },
+    },
+  );
+  const latest = (await findReservationByHexId(db, reservation._id.toHexString())) ?? reservation;
+  return refundApprovedPaymentAndMark(db, latest, paymentIdStr);
+}
+
 /**
  * Confirma la reserva si el pago está approved y el external_reference coincide.
  * Idempotente: si ya está confirmed con el mismo mpPaymentId, no hace nada destructivo.
+ * Si el cupo ya lo tomó otra (pago más rápido o turno del panel), no confirma y reembolsa.
  */
 export async function tryConfirmReservationFromMpPayment(
   db: Db,
@@ -894,11 +955,47 @@ export async function tryConfirmReservationFromMpPayment(
   }
 
   if (reservation.reservationStatus !== "pending_payment") {
+    if (reservation.reservationStatus === "cancelled" && reservation.paymentStatus !== "refunded") {
+      const refunded = await refundApprovedPaymentAndMark(db, reservation, paymentIdStr);
+      return {
+        outcome: "ignored",
+        detail: refunded
+          ? `reservation_status_cancelled_refunded`
+          : `reservation_status_cancelled_refund_failed`,
+      };
+    }
     return { outcome: "ignored", detail: `reservation_status_${reservation.reservationStatus}` };
   }
 
   if (reservation.paymentDeadlineAt && reservation.paymentDeadlineAt.getTime() < Date.now()) {
-    return { outcome: "ignored", detail: "reservation_expired" };
+    const refunded = await releasePendingAfterUnusablePayment(
+      db,
+      reservation,
+      paymentIdStr,
+      "payment_deadline_expired",
+    );
+    return { outcome: "ignored", detail: refunded ? "reservation_expired_refunded" : "reservation_expired_refund_failed" };
+  }
+
+  const durationMinutes = reservationDurationMinutesFromDoc(reservation);
+  const interval = slotIntervalMs(reservation.dateKey, reservation.timeLocal, durationMinutes);
+  if (!interval) {
+    const refunded = await releasePendingAfterUnusablePayment(db, reservation, paymentIdStr, "invalid_slot_on_payment");
+    return { outcome: "ignored", detail: refunded ? "invalid_slot_refunded" : "invalid_slot_refund_failed" };
+  }
+
+  const capGetter = await buildCapGetterForDate(db, reservation.dateKey);
+  const seatTaken = await reservationWouldExceedSalonCapacity(
+    db,
+    reservation.dateKey,
+    interval,
+    capGetter,
+    reservation._id,
+    "confirmed",
+  );
+  if (seatTaken) {
+    const refunded = await releasePendingAfterUnusablePayment(db, reservation, paymentIdStr, "slot_taken_on_payment");
+    return { outcome: "ignored", detail: refunded ? "slot_taken_refunded" : "slot_taken_refund_failed" };
   }
 
   const now = new Date();
@@ -921,7 +1018,36 @@ export async function tryConfirmReservationFromMpPayment(
   );
 
   if (result.modifiedCount !== 1) {
+    const again = await findReservationByHexId(db, reservation._id.toHexString());
+    if (again?.reservationStatus === "confirmed" && again.mpPaymentId === paymentIdStr) {
+      return { outcome: "ignored", detail: "already_confirmed_same_payment" };
+    }
+    if (again && again.reservationStatus !== "confirmed" && again.paymentStatus !== "refunded") {
+      const refunded = await refundApprovedPaymentAndMark(db, again, paymentIdStr);
+      return {
+        outcome: "ignored",
+        detail: refunded ? "concurrent_update_refunded" : "concurrent_update_refund_failed",
+      };
+    }
     return { outcome: "ignored", detail: "concurrent_update" };
+  }
+
+  const confirmedRows = await loadConfirmedCapacityRows(db, reservation.dateKey);
+  if (!selfKeepsConfirmedSeat(reservation.dateKey, reservation._id, interval, now.getTime(), confirmedRows, capGetter)) {
+    await db.collection(COLLECTION).updateOne(
+      { _id: reservation._id, reservationStatus: "confirmed", mpPaymentId: paymentIdStr },
+      {
+        $set: {
+          reservationStatus: "cancelled",
+          cancelledBy: "system",
+          cancelReason: "slot_taken_on_payment",
+          updatedAt: new Date(),
+        },
+      },
+    );
+    const latest = (await findReservationByHexId(db, reservation._id.toHexString())) ?? reservation;
+    const refunded = await refundApprovedPaymentAndMark(db, latest, paymentIdStr);
+    return { outcome: "ignored", detail: refunded ? "slot_taken_race_refunded" : "slot_taken_race_refund_failed" };
   }
 
   return { outcome: "confirmed" };
@@ -940,7 +1066,7 @@ export async function updateMpWebhookEvent(
   await db.collection(WEBHOOK_LOGS).updateOne({ _id: id }, { $set: patch });
 }
 
-/** Marca reservas pending_payment vencidas como canceladas (libera el slot para nuevo pending). */
+/** Marca reservas pending_payment vencidas como canceladas (el cupo ya se libera al vencer paymentDeadlineAt). */
 export async function expirePendingReservations(db: Db): Promise<number> {
   const now = new Date();
   const r = await db.collection(COLLECTION).updateMany(
