@@ -2,6 +2,9 @@
 
 mapa.md
 
+# fuentes locales solo para renderizar flyers
+/docs/lanzamiento/assets/*.ttf
+
 
 # dependencies
 /node_modules

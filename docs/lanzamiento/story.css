@@ -1,0 +1,415 @@
+@font-face {
+  font-family: Playfair;
+  src: url("assets/PlayfairDisplay.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: Montserrat;
+  src: url("assets/Montserrat.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 1080px;
+  overflow: hidden;
+}
+
+body.story {
+  height: 1920px;
+}
+
+body.feed {
+  height: 1350px;
+}
+
+body.square {
+  height: 1080px;
+}
+
+body {
+  font-family: Montserrat, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.frame {
+  position: relative;
+  width: 1080px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 200px 92px 360px;
+  overflow: hidden;
+}
+
+body.feed .frame {
+  padding: 72px 80px 64px;
+  justify-content: center;
+}
+
+body.feed.photo .frame {
+  justify-content: flex-end;
+}
+
+body.feed .cta {
+  margin-top: 36px;
+}
+
+body.square .frame {
+  padding: 64px 72px 56px;
+}
+
+.logo {
+  width: 196px;
+  height: 196px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+body.feed .logo {
+  width: 148px;
+  height: 148px;
+}
+
+.kicker {
+  margin-top: 28px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+}
+
+.headline {
+  margin-top: 36px;
+  font-family: Playfair, serif;
+  font-weight: 600;
+  font-size: 78px;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+body.feed .headline {
+  margin-top: 22px;
+  font-size: 62px;
+}
+
+.sub {
+  margin-top: 28px;
+  max-width: 780px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 420px;
+  margin: 48px 0 8px;
+}
+
+.divider span {
+  flex: 1;
+  height: 1px;
+}
+
+.diamond {
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+}
+
+.benefits {
+  width: 100%;
+  margin-top: 42px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.benefit {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.cta {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.btn {
+  width: 100%;
+  text-align: center;
+  border-radius: 999px;
+  padding: 28px 32px 26px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.btn small {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.hint {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.services {
+  margin-top: 28px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.steps {
+  width: 100%;
+  margin-top: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 28px 28px 28px 24px;
+  border-radius: 28px;
+}
+
+.num {
+  font-family: Playfair, serif;
+  font-size: 42px;
+  font-weight: 600;
+  line-height: 1;
+  min-width: 64px;
+}
+
+.step h3 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.step p {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.82;
+}
+
+.photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.qr {
+  width: 430px;
+  height: 430px;
+  padding: 18px;
+  background: #fff;
+  border-radius: 28px;
+}
+
+/* Cream / olive — identidad del sello LS */
+body.cream {
+  background: #f3f0e8;
+  color: #5c5746;
+}
+
+body.cream .frame {
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(255, 255, 255, 0.7), transparent 60%),
+    #f3f0e8;
+}
+
+body.cream .kicker {
+  color: #8a846c;
+}
+
+body.cream .headline,
+body.cream .num {
+  color: #5f5a47;
+}
+
+body.cream .divider span,
+body.cream .diamond {
+  background: #9bb7d4;
+}
+
+body.cream .icon {
+  border: 1.5px solid #7c7760;
+  color: #7c7760;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+body.cream .btn {
+  background: #7c7760;
+  color: #f7f4ee;
+  box-shadow: 0 18px 40px rgba(92, 87, 70, 0.18);
+}
+
+body.cream .btn small {
+  color: #efebe3;
+}
+
+body.cream .step {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(124, 119, 96, 0.12);
+}
+
+/* Oscuro — igual que la app */
+body.dark {
+  background: #141313;
+  color: #e5e2e1;
+}
+
+body.dark .kicker,
+body.dark .services,
+body.dark .hint {
+  color: #9797a0;
+}
+
+body.dark .headline,
+body.dark .num {
+  color: #f3f0ea;
+}
+
+body.dark .divider span,
+body.dark .diamond {
+  background: #9bb7d4;
+}
+
+body.dark .icon {
+  border: 1.5px solid rgba(155, 183, 212, 0.55);
+  color: #9bb7d4;
+  background: rgba(155, 183, 212, 0.08);
+}
+
+body.dark .btn {
+  background: #9bb7d4;
+  color: #1f1814;
+}
+
+body.dark .step {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.photo {
+  background: #141313;
+  color: #f3f0ea;
+}
+
+body.photo .frame {
+  background: transparent;
+  z-index: 1;
+}
+
+body.story.photo .photo {
+  object-position: 38% 30%;
+}
+
+body.photo .overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(20, 19, 19, 0.74) 0%,
+    rgba(20, 19, 19, 0.4) 34%,
+    rgba(20, 19, 19, 0.42) 54%,
+    rgba(20, 19, 19, 0.9) 100%
+  );
+}
+
+body.photo .kicker,
+body.photo .services,
+body.photo .hint {
+  color: #d7d2c8;
+}
+
+body.photo .divider span,
+body.photo .diamond {
+  background: #9bb7d4;
+}
+
+body.photo .icon {
+  border: 1.5px solid rgba(243, 240, 234, 0.45);
+  color: #f3f0ea;
+  background: rgba(20, 19, 19, 0.28);
+}
+
+body.photo .btn {
+  background: #f3f0ea;
+  color: #1f1814;
+}
+
+body.recepcion .photo {
+  object-position: 50% 18%;
+}
+
+body.recepcion .overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(20, 19, 19, 0.2) 0%,
+    rgba(20, 19, 19, 0.12) 42%,
+    rgba(20, 19, 19, 0.72) 72%,
+    rgba(20, 19, 19, 0.94) 100%
+  );
+}
