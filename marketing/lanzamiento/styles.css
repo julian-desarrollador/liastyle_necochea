@@ -1,0 +1,299 @@
+:root {
+  --ink: #141313;
+  --cream: #f6f2ea;
+  --cream-soft: #e8e2d6;
+  --sage: #7b7866;
+  --sage-deep: #5f5c4e;
+  --dust: #9bb7d4;
+  --muted: #c4c0b4;
+  --white: #fffdf8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  font-family: "Montserrat", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.canvas {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+}
+
+.safe {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: 210px 88px 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.safe.stack {
+  justify-content: center;
+  padding-top: 180px;
+  padding-bottom: 220px;
+}
+
+.logo {
+  width: 196px;
+  height: 196px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.22));
+}
+
+.eyebrow {
+  margin-top: 28px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+}
+
+.headline {
+  font-family: "Playfair Display", serif;
+  font-weight: 600;
+  font-size: 78px;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.sub {
+  margin-top: 28px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  max-width: 820px;
+}
+
+.divider {
+  width: 220px;
+  height: 18px;
+  margin: 36px 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 18'><path d='M0 9h96' stroke='%237b7866' stroke-width='1.5'/><path d='M124 9h96' stroke='%237b7866' stroke-width='1.5'/><path d='M110 1.5l6.5 7.5-6.5 7.5-6.5-7.5z' fill='%237b7866'/></svg>")
+    center / contain no-repeat;
+}
+
+.benefits {
+  width: 100%;
+  max-width: 780px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.benefit {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.dot {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.cta-wrap {
+  margin-top: 56px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.cta-wrap.pin-bottom {
+  margin-top: auto;
+}
+
+.url {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 780px;
+  padding: 28px 48px;
+  border-radius: 999px;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.cta-note {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.services {
+  margin-top: 22px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.bg-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+}
+
+/* Dark editorial */
+.theme-dark {
+  background: #141313;
+  color: var(--cream);
+}
+.theme-dark .eyebrow {
+  color: var(--dust);
+}
+.theme-dark .headline {
+  color: var(--white);
+}
+.theme-dark .sub,
+.theme-dark .benefit,
+.theme-dark .cta-note,
+.theme-dark .services {
+  color: var(--cream-soft);
+}
+.theme-dark .dot {
+  background: var(--dust);
+}
+.theme-dark .url {
+  background: var(--dust);
+  color: #1f1814;
+}
+.theme-dark .divider {
+  filter: brightness(1.35);
+}
+
+/* Cream / logo-led */
+.theme-cream {
+  background: #f7f4ee;
+  color: var(--sage-deep);
+}
+.theme-cream .eyebrow {
+  color: var(--sage);
+}
+.theme-cream .headline {
+  color: var(--sage-deep);
+}
+.theme-cream .sub,
+.theme-cream .benefit,
+.theme-cream .cta-note,
+.theme-cream .services {
+  color: #4d4a40;
+}
+.theme-cream .dot {
+  background: var(--sage);
+}
+.theme-cream .url {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+/* Photo overlay */
+.theme-photo {
+  color: var(--cream);
+}
+.theme-photo .headline {
+  color: #fffdf8;
+}
+.theme-photo .eyebrow {
+  color: var(--dust);
+}
+.theme-photo .sub,
+.theme-photo .benefit,
+.theme-photo .cta-note,
+.theme-photo .services {
+  color: rgba(246, 242, 234, 0.92);
+}
+.theme-photo .dot {
+  background: var(--dust);
+}
+.theme-photo .url {
+  background: rgba(246, 242, 234, 0.96);
+  color: var(--ink);
+}
+.theme-photo .divider {
+  filter: brightness(1.5);
+}
+
+/* Square WhatsApp */
+.square,
+.square body {
+  width: 1080px;
+  height: 1080px;
+}
+.square .canvas,
+.square.canvas {
+  width: 1080px;
+  height: 1080px;
+}
+.safe-square {
+  padding: 64px 80px 72px;
+  justify-content: center;
+}
+
+.steps {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  margin-top: 48px;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 22px;
+  align-items: center;
+  text-align: left;
+}
+
+.num {
+  font-family: "Playfair Display", serif;
+  font-size: 64px;
+  font-weight: 600;
+  color: var(--dust);
+  line-height: 1;
+}
+
+.step h3 {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.step p {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--cream-soft);
+}
