@@ -54,7 +54,7 @@ export function salonConcurrentCapAtInstant(dateKey: string, instantMs: number):
 const COLLECTION = "reservations";
 
 /**
- * `holding`: confirmed + pending_payment vigente (el horario no se ofrece a otra clienta).
+ * `holding`: confirmed + pending_payment (el horario no se ofrece hasta que Analia cancele o se pague).
  * `confirmed`: solo turnos ya pagados/confirmados (para decidir quién gana si dos pagan a la vez).
  */
 export type SlotOccupancyMode = "holding" | "confirmed";
@@ -84,21 +84,12 @@ function durationForReservationRow(r: {
   return reservationDurationMinutesFromDoc(r);
 }
 
-export function slotOccupancyMongoFilter(
-  occupancy: SlotOccupancyMode,
-  now = new Date(),
-): Record<string, unknown> {
+export function slotOccupancyMongoFilter(occupancy: SlotOccupancyMode): Record<string, unknown> {
   if (occupancy === "confirmed") {
     return { reservationStatus: "confirmed" };
   }
   return {
-    $or: [
-      { reservationStatus: "confirmed" },
-      {
-        reservationStatus: "pending_payment",
-        $or: [{ paymentDeadlineAt: { $gt: now } }, { paymentDeadlineAt: null }, { paymentDeadlineAt: { $exists: false } }],
-      },
-    ],
+    $or: [{ reservationStatus: "confirmed" }, { reservationStatus: "pending_payment" }],
   };
 }
 
@@ -106,11 +97,10 @@ function occupancyQuery(
   dateKey: string,
   occupancy: SlotOccupancyMode,
   excludeReservationId?: ObjectId,
-  now = new Date(),
 ): Record<string, unknown> {
   const filter: Record<string, unknown> = {
     dateKey,
-    ...slotOccupancyMongoFilter(occupancy, now),
+    ...slotOccupancyMongoFilter(occupancy),
   };
   if (excludeReservationId) {
     filter._id = { $ne: excludeReservationId };

@@ -979,16 +979,6 @@ export async function tryConfirmReservationFromMpPayment(
     return { outcome: "ignored", detail: `reservation_status_${reservation.reservationStatus}` };
   }
 
-  if (reservation.paymentDeadlineAt && reservation.paymentDeadlineAt.getTime() < Date.now()) {
-    const refunded = await releasePendingAfterUnusablePayment(
-      db,
-      reservation,
-      paymentIdStr,
-      "payment_deadline_expired",
-    );
-    return { outcome: "ignored", detail: refunded ? "reservation_expired_refunded" : "reservation_expired_refund_failed" };
-  }
-
   const durationMinutes = reservationDurationMinutesFromDoc(reservation);
   const interval = slotIntervalMs(reservation.dateKey, reservation.timeLocal, durationMinutes);
   if (!interval) {
@@ -1078,7 +1068,10 @@ export async function updateMpWebhookEvent(
   await db.collection(WEBHOOK_LOGS).updateOne({ _id: id }, { $set: patch });
 }
 
-/** Marca reservas pending_payment vencidas como canceladas (el cupo ya se libera al vencer paymentDeadlineAt). */
+/**
+ * Cancela pending_payment vencidos. No corre solo: Analia eligió manejarlos desde el panel.
+ * Queda para reactivar la opción 1 si más adelante lo pide.
+ */
 export async function expirePendingReservations(db: Db): Promise<number> {
   const now = new Date();
   const r = await db.collection(COLLECTION).updateMany(

@@ -5,8 +5,8 @@ import { expirePendingReservations } from "@/lib/reservations/service";
 export const dynamic = "force-dynamic";
 
 /**
- * Vencimiento de reservas pending_payment. Protegé con CRON_SECRET en Authorization: Bearer ...
- * Vercel invoca los cron con GET; POST queda para ejecuciones manuales.
+ * Vencimiento manual de reservas pending_payment (opción 1). No está en el cron de Vercel:
+ * Analia maneja “Esperando pago” desde el panel. Protegé con CRON_SECRET (Bearer).
  */
 async function handle(request: Request) {
   const secret = process.env.CRON_SECRET;

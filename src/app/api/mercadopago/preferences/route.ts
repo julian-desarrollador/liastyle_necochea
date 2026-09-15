@@ -45,10 +45,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Token de checkout inválido." }, { status: 403 });
     }
 
-    if (reservation.paymentDeadlineAt && reservation.paymentDeadlineAt.getTime() < Date.now()) {
-      return NextResponse.json({ error: "La reserva expiró. Creá una nueva reserva." }, { status: 410 });
-    }
-
     const pref = await createCheckoutProPreference(reservation);
     if (!pref.ok) {
       console.error("[mercadopago/preferences]", pref.error);
