@@ -177,13 +177,12 @@ function monthRangeKeys(year: number, month: number) {
   return { from, to };
 }
 
-export async function listAgendaBlocksForCalendarMonth(
+export async function listAgendaBlocksForDateKeyRange(
   db: Db,
-  year: number,
-  month: number,
+  from: string,
+  to: string,
 ): Promise<SalonAgendaBlockDoc[]> {
   await ensureAgendaBlockIndexes(db);
-  const { from, to } = monthRangeKeys(year, month);
   const col = db.collection<SalonAgendaBlockDoc>(AGENDA_BLOCKS_COLLECTION);
   return col
     .find({
@@ -206,6 +205,30 @@ export async function listAgendaBlocksForCalendarMonth(
     })
     .sort({ anchorDateKey: 1, timeLocal: 1 })
     .toArray();
+}
+
+export async function listAgendaBlocksForCalendarMonth(
+  db: Db,
+  year: number,
+  month: number,
+): Promise<SalonAgendaBlockDoc[]> {
+  const { from, to } = monthRangeKeys(year, month);
+  return listAgendaBlocksForDateKeyRange(db, from, to);
+}
+
+export function buildCapGetterFromAgendaBlocks(
+  dateKey: string,
+  blocks: SalonAgendaBlockDoc[],
+): (instantMs: number) => number {
+  const expanded: ExpandedAgendaBlocks = { salon: [], chair1: [], chair2: [] };
+  for (const doc of blocks) {
+    const iv = intervalForAgendaBlockOnDate(doc, dateKey);
+    if (!iv) continue;
+    if (doc.scope === "salon") expanded.salon.push(iv);
+    else if (doc.scope === "chair_1") expanded.chair1.push(iv);
+    else if (doc.scope === "chair_2") expanded.chair2.push(iv);
+  }
+  return buildEffectiveCapGetter(dateKey, expanded);
 }
 
 export type InsertAgendaBlockInput = {

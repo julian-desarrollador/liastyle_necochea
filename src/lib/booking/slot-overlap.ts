@@ -88,9 +88,7 @@ export function slotOccupancyMongoFilter(occupancy: SlotOccupancyMode): Record<s
   if (occupancy === "confirmed") {
     return { reservationStatus: "confirmed" };
   }
-  return {
-    $or: [{ reservationStatus: "confirmed" }, { reservationStatus: "pending_payment" }],
-  };
+  return { reservationStatus: { $in: ["confirmed", "pending_payment"] } };
 }
 
 function occupancyQuery(
@@ -119,12 +117,21 @@ function intervalFromReservationRow(r: {
   return { startMs, endMs: startMs + dur * 60_000 };
 }
 
+let dateKeyStatusIndexApplied = false;
+
+async function ensureDateKeyStatusIndex(db: Db) {
+  if (dateKeyStatusIndexApplied) return;
+  await db.collection(COLLECTION).createIndex({ dateKey: 1, reservationStatus: 1 }, { name: "by_dateKey_status" });
+  dateKeyStatusIndexApplied = true;
+}
+
 export async function loadBusyIntervalsMs(
   db: Db,
   dateKey: string,
   excludeReservationId?: ObjectId,
   occupancy: SlotOccupancyMode = "holding",
 ): Promise<IntervalMs[]> {
+  await ensureDateKeyStatusIndex(db);
   const rows = await db
     .collection(COLLECTION)
     .find(occupancyQuery(dateKey, occupancy, excludeReservationId), {
@@ -135,6 +142,40 @@ export async function loadBusyIntervalsMs(
   return rows.map((r) =>
     intervalFromReservationRow(r as { startsAt?: unknown; durationMinutes?: unknown; treatmentId?: unknown }),
   );
+}
+
+/** Una sola lectura de ocupación para varios `dateKey` (calendario del mes). */
+export async function loadBusyIntervalsByDateKey(
+  db: Db,
+  dateKeys: string[],
+  occupancy: SlotOccupancyMode = "holding",
+): Promise<Map<string, IntervalMs[]>> {
+  const unique = [...new Set(dateKeys.filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)))];
+  const byDay = new Map<string, IntervalMs[]>();
+  for (const key of unique) byDay.set(key, []);
+  if (unique.length === 0) return byDay;
+
+  await ensureDateKeyStatusIndex(db);
+  const rows = await db
+    .collection(COLLECTION)
+    .find(
+      {
+        dateKey: { $in: unique },
+        ...slotOccupancyMongoFilter(occupancy),
+      },
+      { projection: { dateKey: 1, startsAt: 1, durationMinutes: 1, treatmentId: 1 } },
+    )
+    .toArray();
+
+  for (const r of rows) {
+    const key = String(r.dateKey ?? "");
+    const list = byDay.get(key);
+    if (!list) continue;
+    list.push(
+      intervalFromReservationRow(r as { startsAt?: unknown; durationMinutes?: unknown; treatmentId?: unknown }),
+    );
+  }
+  return byDay;
 }
 
 export async function loadConfirmedCapacityRows(db: Db, dateKey: string): Promise<ConfirmedCapacityRow[]> {

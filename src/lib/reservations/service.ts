@@ -62,7 +62,7 @@ function pendingTtlMs(): number {
 }
 
 /** Subir si cambia la definición de índices o la normalización de teléfonos (fuerza re-backfill). */
-const RESERVATION_INDEXES_VERSION = 5;
+const RESERVATION_INDEXES_VERSION = 6;
 let reservationIndexesVersionApplied = 0;
 
 export async function ensureReservationIndexes(db: Db) {
@@ -84,6 +84,7 @@ export async function ensureReservationIndexes(db: Db) {
   await col.createIndex({ startsAt: 1 }, { name: "by_startsAt" });
   await col.createIndex({ createdAt: -1 }, { name: "by_created" });
   await col.createIndex({ reservationStatus: 1, startsAt: 1 }, { name: "by_status_starts" });
+  await col.createIndex({ dateKey: 1, reservationStatus: 1 }, { name: "by_dateKey_status" });
   await col.createIndex({ externalReference: 1 }, { sparse: true, name: "by_external_ref" });
   await col.createIndex({ paymentDeadlineAt: 1 }, { sparse: true, name: "by_payment_deadline" });
   await col.createIndex({ customerPhoneDigits: 1, startsAt: -1 }, { name: "by_customer_phone_starts" });

@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 
 import { buildSalonCalendarItems } from "@/lib/booking/salon-availability";
-import { computeBookableSlots, computeBookableSlotsForTreatmentIds } from "@/lib/booking/compute-bookable-slots";
+import { computeMonthBookableFlags } from "@/lib/booking/compute-bookable-slots";
 import { getDb } from "@/lib/mongodb";
 import { verifyPanelCookie } from "@/lib/panel-turnos-auth";
 import { validateServiceCombo } from "@/lib/treatments/booking-rules";
@@ -57,28 +57,15 @@ export async function GET(request: Request) {
     const db = await getDb();
     const now = new Date();
     const keys = buildSalonCalendarItems(year, monthIndex).map((d) => d.value);
-    const entries = await Promise.all(
-      keys.map(async (dateKey) => {
-        const slots =
-          serviceIds.length > 0
-            ? await computeBookableSlotsForTreatmentIds(db, {
-                dateKey,
-                treatmentIds: serviceIds,
-                now,
-                scope,
-                allowOverCapacity: scope === "panel",
-              })
-            : await computeBookableSlots(db, {
-                dateKey,
-                treatmentId,
-                now,
-                scope,
-                allowOverCapacity: scope === "panel",
-              });
-        return [dateKey, slots.length > 0] as const;
-      }),
-    );
-    return NextResponse.json({ availability: Object.fromEntries(entries) });
+    const availability = await computeMonthBookableFlags(db, {
+      dateKeys: keys,
+      now,
+      scope,
+      treatmentId: serviceIds.length > 0 ? undefined : treatmentId,
+      treatmentIds: serviceIds.length > 0 ? serviceIds : undefined,
+      allowOverCapacity: scope === "panel",
+    });
+    return NextResponse.json({ availability });
   } catch (e) {
     console.error("[api/booking/month-availability]", e);
     return NextResponse.json({ error: "No se pudo calcular la disponibilidad." }, { status: 500 });
