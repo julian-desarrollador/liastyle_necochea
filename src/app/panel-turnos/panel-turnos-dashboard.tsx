@@ -24,6 +24,7 @@ import {
   panelMonthTitle,
 } from "@/lib/booking/panel-month-grid";
 import { pickScrollToReservationId } from "@/lib/booking/panel-now-focus";
+import { canonicalPhoneDigitsAR } from "@/lib/customer/phone-canonical-ar";
 
 export type { PanelAgendaBlock, PanelReservation } from "@/components/panel/panel-types";
 
@@ -50,17 +51,10 @@ function dayLongFromKey(dateKey: string) {
   return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long" }).format(dt);
 }
 
-function digitsOnlyPhone(s: string) {
-  return s.replace(/\D/g, "");
-}
-
 function whatsAppDigitsFromStoredPhone(raw: string): string | null {
-  const d = digitsOnlyPhone(raw);
-  if (d.length < 10 || d.length > 15) return null;
-  if (d.startsWith("54")) return d;
-  if (d.length === 11 && d.startsWith("9")) return `54${d}`;
-  if (d.length === 10) return `549${d}`;
-  return `54${d}`;
+  const canonical = canonicalPhoneDigitsAR(raw);
+  if (canonical.startsWith("549") && canonical.length >= 11) return canonical;
+  return null;
 }
 
 function whatsAppChatUrl(
@@ -444,6 +438,9 @@ export function PanelTurnosDashboard() {
                   whatsAppUrl={waUrl}
                   onRequestCancel={() => setCancelConfirmReservationId(r.id)}
                   cancelDisabled={cancellingReservationId === r.id}
+                  onReservationPatch={(id, patch) => {
+                    setList((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+                  }}
                 />
               );
             })

@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import {
   CalendarClock,
   Check,
@@ -32,6 +32,7 @@ type PanelReservationCardProps = {
   whatsAppUrl: string | null;
   onRequestCancel: () => void;
   cancelDisabled?: boolean;
+  onReservationPatch?: (id: string, patch: Partial<PanelReservation>) => void;
 };
 
 function ServiceLineIcon({ category, muted }: { category: string; muted?: boolean }) {
@@ -158,11 +159,31 @@ function formatWaTimestamp(iso: string): string {
   }).format(date);
 }
 
+function canOfferManualReminder(reservation: PanelReservation): boolean {
+  if (reservation.reservationStatus !== "confirmed") return false;
+  if (reservation.paymentStatus !== "approved" && reservation.paymentStatus !== "not_required") {
+    return false;
+  }
+  const reminderStatus =
+    reservation.waReminder24hStatus ?? (reservation.waReminder24hSentAt ? "sent" : null);
+  if (reminderStatus === "sent" || reminderStatus === "sending" || reminderStatus === "unknown") {
+    return false;
+  }
+  const starts = new Date(reservation.startsAt);
+  if (Number.isNaN(starts.getTime())) return false;
+  return starts.getTime() - Date.now() >= 90 * 60 * 1000;
+}
+
 function WhatsAppTrackingBlock({
   reservation,
+  onReservationPatch,
 }: {
   reservation: PanelReservation;
+  onReservationPatch?: (id: string, patch: Partial<PanelReservation>) => void;
 }) {
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
   if (reservation.reservationStatus === "cancelled") {
     return reservation.cancelledBy === "whatsapp" ? (
       <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-[13px] leading-snug text-red-800">
@@ -182,9 +203,9 @@ function WhatsAppTrackingBlock({
     reservation.waReminder24hStatus ??
     (reservation.waReminder24hSentAt ? "sent" : null);
   const reminderSent = reminderStatus === "sent";
-  const reminderInProgress = reminderStatus === "sending";
+  const reminderInProgress = reminderStatus === "sending" || sending;
   const reminderUnknown = reminderStatus === "unknown";
-  const reminderAttempted = Boolean(reservation.waReminder24hSentAt);
+  const reminderAttempted = Boolean(reservation.waReminder24hSentAt) || sending;
   const attendanceConfirmed = Boolean(reservation.waAttendanceConfirmedAt);
   const reminderWhen = reservation.waReminder24hSentAt
     ? formatWaTimestamp(reservation.waReminder24hSentAt)
@@ -192,6 +213,35 @@ function WhatsAppTrackingBlock({
   const attendanceWhen = reservation.waAttendanceConfirmedAt
     ? formatWaTimestamp(reservation.waAttendanceConfirmedAt)
     : "";
+  const showSendButton = canOfferManualReminder(reservation) && !sending;
+
+  async function sendReminder() {
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch(
+        `/api/panel-turnos/reservations/${encodeURIComponent(reservation.id)}/reminder`,
+        { method: "POST", credentials: "same-origin" },
+      );
+      const data = (await res.json()) as {
+        error?: string;
+        waReminder24hSentAt?: string;
+        waReminder24hStatus?: PanelReservation["waReminder24hStatus"];
+      };
+      if (!res.ok) {
+        setSendError(data.error ?? "No se pudo enviar el recordatorio.");
+        return;
+      }
+      onReservationPatch?.(reservation.id, {
+        waReminder24hSentAt: data.waReminder24hSentAt ?? new Date().toISOString(),
+        waReminder24hStatus: data.waReminder24hStatus ?? "sent",
+      });
+    } catch {
+      setSendError("Sin conexión. Probá de nuevo.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div className="mt-3 space-y-1.5 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
@@ -255,13 +305,27 @@ function WhatsAppTrackingBlock({
               : "Pendiente (tras el recordatorio)"}
         </p>
       </div>
+      {sendError ? (
+        <p role="alert" className="text-[13px] text-red-700">
+          {sendError}
+        </p>
+      ) : null}
+      {showSendButton ? (
+        <button
+          type="button"
+          onClick={() => void sendReminder()}
+          className="mt-1 inline-flex h-10 w-full cursor-pointer items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-medium text-gray-800 hover:bg-gray-50"
+        >
+          Enviar recordatorio
+        </button>
+      ) : null}
     </div>
   );
 }
 
 export const PanelReservationCard = forwardRef<HTMLElement, PanelReservationCardProps>(
   function PanelReservationCard(
-    { reservation: r, selectedDateKey, whatsAppUrl, onRequestCancel, cancelDisabled = false },
+    { reservation: r, selectedDateKey, whatsAppUrl, onRequestCancel, cancelDisabled = false, onReservationPatch },
     ref,
   ) {
     const focused = isReservationTimeFocused(r.timeLocal, selectedDateKey);
@@ -365,7 +429,7 @@ export const PanelReservationCard = forwardRef<HTMLElement, PanelReservationCard
           {chip.detail ? (
             <p className="mt-1.5 text-[11px] font-medium text-gray-500">{chip.detail}</p>
           ) : null}
-          <WhatsAppTrackingBlock reservation={r} />
+          <WhatsAppTrackingBlock reservation={r} onReservationPatch={onReservationPatch} />
         </div>
 
         {canManage ? (

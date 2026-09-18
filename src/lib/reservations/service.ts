@@ -24,6 +24,7 @@ import { SALON_TREATMENTS, findSalonTreatmentById, type SalonTreatment } from "@
 import { PUBLIC_DEPOSIT_RATE, summarizeDepositForTreatments } from "@/lib/treatments/deposit";
 
 import { backfillCustomerPhoneDigitsBatch, renormalizeCustomerPhoneDigitsBatch } from "@/lib/reservations/customer-queries";
+import { scheduleDueReminderSend } from "@/lib/whatsapp/send-due-reminders";
 import {
   canCustomerCancelByStartsAt,
   CUSTOMER_CANCEL_TOO_LATE_MESSAGE,
@@ -397,6 +398,7 @@ export async function insertPublicConfirmedReservationWithoutPayment(
       { _id: result.insertedId },
       { $set: { externalReference: id, updatedAt: new Date() } },
     );
+    scheduleDueReminderSend(db, id);
     return {
       ok: true,
       id,
@@ -553,6 +555,7 @@ export async function insertPanelReservation(
       { _id: result.insertedId },
       { $set: { externalReference: id, updatedAt: new Date() } },
     );
+    scheduleDueReminderSend(db, id);
     return { ok: true, id };
   } catch (e) {
     if (e instanceof MongoServerError && e.code === 11000) {
@@ -706,6 +709,7 @@ export async function rescheduleReservation(
     return { error: "No se pudo actualizar el turno. Probá de nuevo.", code: "CONFLICT" };
   }
 
+  scheduleDueReminderSend(db, hex);
   return { ok: true as const };
 }
 
@@ -1053,6 +1057,7 @@ export async function tryConfirmReservationFromMpPayment(
     return { outcome: "ignored", detail: refunded ? "slot_taken_race_refunded" : "slot_taken_race_refund_failed" };
   }
 
+  scheduleDueReminderSend(db, reservation._id.toHexString());
   return { outcome: "confirmed" };
 }
 
