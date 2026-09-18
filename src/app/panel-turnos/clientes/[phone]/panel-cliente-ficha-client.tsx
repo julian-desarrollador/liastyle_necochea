@@ -2,6 +2,7 @@
 
 import { ChevronLeft, FileText, MessageCircle, Pencil } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PanelClientVisit } from "@/lib/panel/client-serialize";
@@ -48,6 +49,7 @@ function whatsAppChatUrl(phone: string): string | null {
 }
 
 export function PanelClienteFichaClient({ phoneDigits }: Props) {
+  const router = useRouter();
   const [client, setClient] = useState<ClientInfo | null>(null);
   const [visits, setVisits] = useState<PanelClientVisit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,11 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   const [vipError, setVipError] = useState<string | null>(null);
   const [depositBusy, setDepositBusy] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
+  const [editingIdentity, setEditingIdentity] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftPhone, setDraftPhone] = useState("");
+  const [identitySaving, setIdentitySaving] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +98,67 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setEditingIdentity(false);
+    setIdentityError(null);
+  }, [phoneDigits]);
+
+  function startIdentityEdit() {
+    if (!client) return;
+    setDraftName(client.customerName);
+    setDraftPhone(client.customerPhone);
+    setIdentityError(null);
+    setEditingIdentity(true);
+  }
+
+  function cancelIdentityEdit() {
+    setEditingIdentity(false);
+    setIdentityError(null);
+  }
+
+  async function saveIdentity() {
+    setIdentitySaving(true);
+    setIdentityError(null);
+    try {
+      const res = await fetch(`/api/panel-turnos/clientes/${encodeURIComponent(phoneDigits)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ customerName: draftName, customerPhone: draftPhone }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        phoneDigits?: string;
+        customerName?: string;
+        customerPhone?: string;
+      };
+      if (!res.ok) {
+        setIdentityError(data.error ?? "No se pudieron guardar los datos.");
+        return;
+      }
+      const nextPhone = data.phoneDigits?.trim() || phoneDigits;
+      if (nextPhone !== phoneDigits) {
+        router.replace(`/panel-turnos/clientes/${encodeURIComponent(nextPhone)}`);
+        return;
+      }
+      setClient((prev) =>
+        prev
+          ? {
+              ...prev,
+              customerName: data.customerName?.trim() || prev.customerName,
+              customerPhone: data.customerPhone?.trim() || prev.customerPhone,
+              phoneDigits: nextPhone,
+            }
+          : prev,
+      );
+      setEditingIdentity(false);
+    } catch {
+      setIdentityError("Sin conexión. Probá de nuevo.");
+    } finally {
+      setIdentitySaving(false);
+    }
+  }
 
   function startEdit(visit: PanelClientVisit) {
     setEditingId(visit.id);
@@ -267,12 +335,74 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
                 <p className="mt-1 text-[13px] text-gray-400">
                   {client.visitCount} {client.visitCount === 1 ? "visita realizada" : "visitas realizadas"}
                 </p>
+                {!editingIdentity ? (
+                  <button
+                    type="button"
+                    onClick={startIdentityEdit}
+                    className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                    Editar datos
+                  </button>
+                ) : null}
               </>
             ) : (
               <h1 className="font-montserrat text-[22px] font-bold text-gray-900">Clienta</h1>
             )}
           </div>
         </header>
+
+        {client && editingIdentity ? (
+          <article className={`${panelCard} mb-4 p-4`}>
+            <p className="mb-3 text-[12px] font-semibold tracking-wide text-gray-500 uppercase">Editar datos</p>
+            <label htmlFor="client-name" className={panelLabel}>
+              Nombre
+            </label>
+            <input
+              id="client-name"
+              type="text"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              autoComplete="name"
+              className={panelInput}
+            />
+            <label htmlFor="client-phone" className={`${panelLabel} mt-3 block`}>
+              WhatsApp
+            </label>
+            <input
+              id="client-phone"
+              type="tel"
+              value={draftPhone}
+              onChange={(e) => setDraftPhone(e.target.value)}
+              autoComplete="tel"
+              inputMode="tel"
+              className={panelInput}
+            />
+            {identityError ? (
+              <p role="alert" className="mt-2 text-[14px] text-red-700">
+                {identityError}
+              </p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={identitySaving}
+                onClick={() => void saveIdentity()}
+                className={`${panelPrimaryBtn} h-11 text-[15px]`}
+              >
+                {identitySaving ? "Guardando…" : "Guardar"}
+              </button>
+              <button
+                type="button"
+                disabled={identitySaving}
+                onClick={cancelIdentityEdit}
+                className="flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[15px] font-medium text-gray-700"
+              >
+                Cancelar
+              </button>
+            </div>
+          </article>
+        ) : null}
 
         {client && waUrl ? (
           <a

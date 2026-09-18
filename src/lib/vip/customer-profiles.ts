@@ -231,3 +231,128 @@ export async function setDepositExemptManualForPhone(
   );
   return depositExemptManual;
 }
+
+function queryKeysForPhone(phoneDigits: string): string[] {
+  const key = normalizePhoneKey(phoneDigits);
+  return key ? customerPhoneDigitsQueryValues(key) : [];
+}
+
+function keysOverlap(a: string[], b: string[]): boolean {
+  const set = new Set(a);
+  return b.some((k) => set.has(k));
+}
+
+/** Actualiza el nombre en el perfil si ya existe (no crea uno nuevo). */
+export async function updateCustomerProfileName(
+  db: Db,
+  phoneDigits: string,
+  customerName: string,
+): Promise<void> {
+  await ensureCustomerProfileIndexes(db);
+  const keys = queryKeysForPhone(phoneDigits);
+  if (keys.length === 0) return;
+
+  await db.collection<CustomerProfileDoc>(COLLECTION).updateMany(
+    { phoneDigits: { $in: keys } },
+    {
+      $set: {
+        customerName,
+        updatedAt: new Date(),
+        updatedBy: "panel" as const,
+      },
+    },
+  );
+}
+
+/**
+ * True si el WhatsApp destino ya tiene un perfil de otra clienta.
+ * El mismo número en otro formato no cuenta como conflicto.
+ */
+export async function customerProfileRekeyWouldConflict(
+  db: Db,
+  fromPhone: string,
+  toPhone: string,
+): Promise<boolean> {
+  await ensureCustomerProfileIndexes(db);
+  const fromKey = normalizePhoneKey(fromPhone);
+  const toKey = normalizePhoneKey(toPhone);
+  if (!fromKey || !toKey || fromKey === toKey) return false;
+
+  const fromKeys = customerPhoneDigitsQueryValues(fromKey);
+  const toKeys = customerPhoneDigitsQueryValues(toKey);
+  if (keysOverlap(fromKeys, toKeys)) return false;
+
+  const col = db.collection<CustomerProfileDoc>(COLLECTION);
+  const toDoc = await col.findOne({ phoneDigits: { $in: toKeys } });
+  if (!toDoc) return false;
+
+  const fromDoc = await col.findOne({ phoneDigits: { $in: fromKeys } });
+  if (fromDoc && fromDoc._id.equals(toDoc._id)) return false;
+  return true;
+}
+
+/**
+ * Mueve el doc de `customer_profiles` al teléfono canónico nuevo.
+ * Si no hay perfil, no hace nada. Conflicto con otra clienta → `"conflict"`.
+ */
+export async function rekeyCustomerProfile(
+  db: Db,
+  fromPhone: string,
+  toPhone: string,
+  opts?: { customerName?: string | null },
+): Promise<"ok" | "conflict"> {
+  await ensureCustomerProfileIndexes(db);
+  const fromKey = normalizePhoneKey(fromPhone);
+  const toKey = normalizePhoneKey(toPhone);
+  if (!fromKey || !toKey) throw new Error("Teléfono inválido.");
+
+  const col = db.collection<CustomerProfileDoc>(COLLECTION);
+  const now = new Date();
+  const nameSet = opts?.customerName != null ? { customerName: opts.customerName } : {};
+
+  if (fromKey === toKey) {
+    await col.updateMany(
+      { phoneDigits: { $in: customerPhoneDigitsQueryValues(fromKey) } },
+      { $set: { updatedAt: now, updatedBy: "panel" as const, ...nameSet } },
+    );
+    return "ok";
+  }
+
+  if (await customerProfileRekeyWouldConflict(db, fromKey, toKey)) {
+    return "conflict";
+  }
+
+  const fromKeys = customerPhoneDigitsQueryValues(fromKey);
+  const toKeys = customerPhoneDigitsQueryValues(toKey);
+  const fromDoc = await col.findOne({ phoneDigits: { $in: fromKeys } });
+  const toDoc = await col.findOne({ phoneDigits: { $in: toKeys } });
+
+  if (!fromDoc && !toDoc) return "ok";
+
+  const keep = fromDoc ?? toDoc;
+  if (!keep) return "ok";
+
+  if (toDoc && fromDoc && !fromDoc._id.equals(toDoc._id)) {
+    await col.deleteOne({ _id: toDoc._id });
+  }
+
+  try {
+    await col.updateOne(
+      { _id: keep._id },
+      {
+        $set: {
+          phoneDigits: toKey,
+          updatedAt: now,
+          updatedBy: "panel" as const,
+          ...nameSet,
+        },
+      },
+    );
+  } catch (e) {
+    const code = typeof e === "object" && e && "code" in e ? (e as { code?: unknown }).code : null;
+    if (code === 11000) return "conflict";
+    throw e;
+  }
+
+  return "ok";
+}
