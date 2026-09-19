@@ -213,3 +213,10 @@ export function isLikelyWhatsappNumber(raw: string): boolean {
   const digits = normalizePhoneDigits(raw);
   return digits.length >= 10 && digits.length <= 15;
 }
+
+/** Últimos 4 dígitos para listados del panel (sin mostrar el número completo). */
+export function maskPhoneForPanelDisplay(raw: string): string {
+  const digits = normalizePhoneDigits(raw);
+  if (digits.length < 4) return raw.trim() || "—";
+  return `··· ${digits.slice(-4)}`;
+}

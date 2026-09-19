@@ -720,9 +720,10 @@ export function BookingPicker({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="@container">
+                <div className="grid grid-cols-2 gap-3 @min-[32rem]:grid-cols-4">
                   {slotsLoading ? (
-                    <div className="col-span-2 rounded-2xl border border-[var(--outline)]/10 bg-white px-4 py-5 text-center text-[13px] text-[#7f7c7a]">
+                    <div className="col-span-full rounded-2xl border border-[var(--outline)]/10 bg-white px-4 py-5 text-center text-[13px] text-[#7f7c7a]">
                       Cargando horarios…
                     </div>
                   ) : availableTimes.length > 0 ? (
@@ -745,7 +746,7 @@ export function BookingPicker({
                     })
                   ) : (
                     <div
-                      className={`col-span-2 rounded-2xl border px-4 py-5 text-center ${
+                      className={`col-span-full rounded-2xl border px-4 py-5 text-center ${
                         selectedDate
                           ? "border-amber-500/35 bg-amber-50 text-amber-900"
                           : "border-[var(--premium-gold-light)]/35 bg-[var(--premium-gold)]/10 text-[#1c1b1b]"
@@ -776,6 +777,7 @@ export function BookingPicker({
                       )}
                     </div>
                   )}
+                </div>
                 </div>
               </section>
             </div>
@@ -877,7 +879,7 @@ export function BookingPicker({
       </section>
 
       <section
-        className={`mt-4 overflow-hidden rounded-[24px] border p-3 shadow-sm ${
+        className={`mx-auto mt-4 w-full max-w-md overflow-hidden rounded-[24px] border p-3 shadow-sm ${
           isLight
             ? "border-[var(--outline)]/10 bg-white text-[#1c1b1b]"
             : "border-white/8 bg-[#e4c48f] text-[#2c241b] shadow-[0_12px_26px_rgba(0,0,0,0.36)]"
@@ -1028,10 +1030,11 @@ export function BookingPicker({
             <ChevronRight className={`h-4 w-4 ${textMuted}`} strokeWidth={1.8} />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="@container mt-4">
+          <div className="grid grid-cols-2 gap-3 @min-[32rem]:grid-cols-4">
             {slotsLoading ? (
               <div
-                className={`col-span-2 rounded-2xl border px-4 py-5 text-center text-[13px] ${
+                className={`col-span-full rounded-2xl border px-4 py-5 text-center text-[13px] ${
                   isLight
                     ? "border-[var(--outline)]/10 bg-white text-[#7f7c7a]"
                     : "border-white/8 bg-[#171717] text-[var(--soft-gray)]/68"
@@ -1073,7 +1076,7 @@ export function BookingPicker({
               })
             ) : (
               <div
-                className={`col-span-2 rounded-2xl border px-4 py-5 text-center ${
+                className={`col-span-full rounded-2xl border px-4 py-5 text-center ${
                   selectedDate
                     ? "border-amber-500/35 bg-amber-50 text-amber-900"
                     : isLight
@@ -1112,6 +1115,7 @@ export function BookingPicker({
                 )}
               </div>
             )}
+          </div>
           </div>
         </section>
       </div>

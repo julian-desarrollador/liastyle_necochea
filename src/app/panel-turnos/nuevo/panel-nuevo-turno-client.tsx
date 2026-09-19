@@ -17,9 +17,16 @@ import {
   SALON_TREATMENT_OPTIONS,
   formatSalonDisplayDate,
   isLikelyWhatsappNumber,
+  maskPhoneForPanelDisplay,
 } from "@/lib/booking/salon-availability";
 import { isSoloComboTreatmentId } from "@/lib/treatments/booking-rules";
 import { findSalonTreatmentById, type TreatmentCategory } from "@/lib/treatments/catalog";
+
+type PanelClientSuggestion = {
+  phoneDigits: string;
+  customerName: string;
+  customerPhone: string;
+};
 
 export function PanelNuevoTurnoClient() {
   const router = useRouter();
@@ -44,12 +51,19 @@ export function PanelNuevoTurnoClient() {
   const [serviceModalDismissNonce, setServiceModalDismissNonce] = useState(0);
   const [serviceSelectionConfirmed, setServiceSelectionConfirmed] = useState(false);
   const [dateStepConfirmed, setDateStepConfirmed] = useState(false);
+  const [recentClients, setRecentClients] = useState<PanelClientSuggestion[]>([]);
+  const [recentClientsLoading, setRecentClientsLoading] = useState(false);
+  const [nameSuggestions, setNameSuggestions] = useState<PanelClientSuggestion[]>([]);
+  const [nameSuggestionsOpen, setNameSuggestionsOpen] = useState(false);
+  const [nameSearchLoading, setNameSearchLoading] = useState(false);
 
   const bookingFocusRef = useRef<HTMLDivElement | null>(null);
   const dataSectionRef = useRef<HTMLDivElement | null>(null);
   const confirmSectionRef = useRef<HTMLElement | null>(null);
   const scrollConfirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDatosCompleteRef = useRef(false);
+  const nameSearchAbortRef = useRef<AbortController | null>(null);
+  const skipNameSearchRef = useRef(false);
 
   const handleSelectCategory = useCallback((category: TreatmentCategory) => {
     setOpenModalCategory(category);
@@ -95,6 +109,88 @@ export function PanelNuevoTurnoClient() {
   const showWhatsappInvalidHint =
     customerPhone.trim().length >= 8 && !isLikelyWhatsappNumber(customerPhone);
   const showCategoryStep = !serviceSelectionConfirmed;
+
+  useEffect(() => {
+    let cancelled = false;
+    setRecentClientsLoading(true);
+    fetch("/api/panel-turnos/clientes?limit=10", { credentials: "same-origin" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<{ clients?: PanelClientSuggestion[] }>;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setRecentClients(Array.isArray(data.clients) ? data.clients : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRecentClients([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRecentClientsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const q = customerName.trim();
+    if (skipNameSearchRef.current) {
+      skipNameSearchRef.current = false;
+      return;
+    }
+    if (q.length < 2) {
+      nameSearchAbortRef.current?.abort();
+      setNameSuggestions([]);
+      setNameSuggestionsOpen(false);
+      setNameSearchLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      nameSearchAbortRef.current?.abort();
+      const ac = new AbortController();
+      nameSearchAbortRef.current = ac;
+      setNameSearchLoading(true);
+      fetch(`/api/panel-turnos/clientes?q=${encodeURIComponent(q)}&limit=8`, {
+        credentials: "same-origin",
+        signal: ac.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.json() as Promise<{ clients?: PanelClientSuggestion[] }>;
+        })
+        .then((data) => {
+          const items = Array.isArray(data.clients) ? data.clients : [];
+          setNameSuggestions(items);
+          setNameSuggestionsOpen(items.length > 0);
+        })
+        .catch(() => {
+          if (!ac.signal.aborted) {
+            setNameSuggestions([]);
+            setNameSuggestionsOpen(false);
+          }
+        })
+        .finally(() => {
+          if (!ac.signal.aborted) setNameSearchLoading(false);
+        });
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timer);
+      nameSearchAbortRef.current?.abort();
+    };
+  }, [customerName]);
+
+  const applyPanelClient = useCallback((client: PanelClientSuggestion) => {
+    skipNameSearchRef.current = true;
+    setCustomerName(client.customerName);
+    setCustomerPhone(client.customerPhone);
+    setWhatsappOptIn(true);
+    setNameSuggestions([]);
+    setNameSuggestionsOpen(false);
+  }, []);
 
   const bookingHeaderStep = showCategoryStep
     ? 1
@@ -405,8 +501,8 @@ export function PanelNuevoTurnoClient() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f8f6f2] pb-24 text-[#1c1b1b]">
-      <header className="sticky top-0 z-40 flex w-full flex-col items-center justify-center bg-[#f8f6f2]/90 px-6 pt-8 backdrop-blur-md">
-        <div className="flex w-full max-w-md items-center justify-between">
+      <header className="sticky top-0 z-40 flex w-full flex-col items-center justify-center bg-[#f8f6f2]/90 px-6 pt-8 backdrop-blur-md md:px-8">
+        <div className="flex w-full max-w-md items-center justify-between md:max-w-5xl">
           <button
             type="button"
             onClick={handleBookingBack}
@@ -421,7 +517,7 @@ export function PanelNuevoTurnoClient() {
           <span className="w-10" aria-hidden />
         </div>
 
-        <div className="mt-6 flex max-w-md flex-col items-center gap-2">
+        <div className="mt-6 flex max-w-md flex-col items-center gap-2 md:max-w-5xl">
           <span className="text-xs font-bold tracking-[0.1em] text-[var(--premium-gold-light)] uppercase">
             Paso {bookingHeaderStep} de 3
           </span>
@@ -440,7 +536,7 @@ export function PanelNuevoTurnoClient() {
         </div>
       </header>
 
-      <main className="mx-auto mt-8 w-full max-w-md px-6">
+      <main className="mx-auto mt-8 w-full max-w-md px-6 md:max-w-5xl md:px-8">
         {showCategoryStep ? (
           <BookingCategoryStep
             onSelectCategory={handleSelectCategory}
@@ -487,7 +583,31 @@ export function PanelNuevoTurnoClient() {
                 </div>
               </div>
               <div className="space-y-3">
-                <div>
+                {recentClientsLoading ? (
+                  <p className="text-[12px] text-[#7f7c7a]">Cargando clientas recientes…</p>
+                ) : recentClients.length > 0 ? (
+                  <div>
+                    <p className="text-[11px] tracking-[0.12em] text-[#7f7c7a]">Clientes recientes</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {recentClients.map((client) => (
+                        <button
+                          key={client.phoneDigits}
+                          type="button"
+                          onClick={() => applyPanelClient(client)}
+                          className="cursor-pointer rounded-full border border-[var(--premium-gold-light)]/35 bg-[var(--premium-gold-light)]/10 px-3 py-2 text-left text-[13px] font-medium text-[#1c1b1b] transition hover:border-[var(--premium-gold-light)]/55 hover:bg-[var(--premium-gold-light)]/16 active:scale-[0.98]"
+                        >
+                          <span className="block truncate">{client.customerName}</span>
+                          <span className="mt-0.5 block text-[11px] font-normal text-[#7f7c7a]">
+                            {maskPhoneForPanelDisplay(client.customerPhone)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+                  <div className="relative">
                   <label htmlFor="pn-customerName" className="text-[11px] tracking-[0.12em] text-[#7f7c7a]">
                     Nombre y apellido
                   </label>
@@ -497,9 +617,43 @@ export function PanelNuevoTurnoClient() {
                     autoComplete="name"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
+                    onFocus={() => {
+                      if (nameSuggestions.length > 0) setNameSuggestionsOpen(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setNameSuggestionsOpen(false), 150);
+                    }}
                     placeholder="Como figura en el DNI o preferís que la llamemos"
                     className="mt-1.5 w-full rounded-xl border border-[var(--outline)]/15 bg-[#faf8f4] px-3 py-3 text-[15px] text-[#1c1b1b] outline-none placeholder:text-[#7f7c7a]/60 focus:border-[var(--premium-gold-light)]/55"
                   />
+                  {nameSearchLoading ? (
+                    <p className="mt-1 text-[11px] text-[#7f7c7a]">Buscando clientas…</p>
+                  ) : null}
+                  {nameSuggestionsOpen && nameSuggestions.length > 0 ? (
+                    <ul
+                      role="listbox"
+                      aria-label="Sugerencias de clientas"
+                      className="absolute right-0 left-0 z-20 mt-1 max-h-52 overflow-y-auto rounded-xl border border-[var(--outline)]/15 bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
+                    >
+                      {nameSuggestions.map((client) => (
+                        <li key={client.phoneDigits} role="option">
+                          <button
+                            type="button"
+                            className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[var(--premium-gold-light)]/10"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyPanelClient(client)}
+                          >
+                            <span className="min-w-0 truncate text-[14px] font-medium text-[#1c1b1b]">
+                              {client.customerName}
+                            </span>
+                            <span className="shrink-0 text-[12px] text-[#7f7c7a]">
+                              {maskPhoneForPanelDisplay(client.customerPhone)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 <div>
                   <label htmlFor="pn-customerPhone" className="text-[11px] tracking-[0.12em] text-[#7f7c7a]">
@@ -533,6 +687,7 @@ export function PanelNuevoTurnoClient() {
                       guiones).
                     </p>
                   ) : null}
+                </div>
                 </div>
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--outline)]/10 bg-[#faf8f4] px-3 py-3">
                   <input

@@ -54,6 +54,7 @@ export function BookingDateStep({
 
   return (
     <div className="pb-28">
+      <div className="mx-auto w-full max-w-md">
       <div className="mb-4 flex items-center justify-between rounded-xl bg-[#eceae6]/80 px-4 py-3">
         <p className="text-sm text-[#7f7c7a]">{summaryText}</p>
         <span className="h-0.5 w-6 rounded-full bg-[var(--premium-gold-light)]" aria-hidden />
@@ -154,6 +155,7 @@ export function BookingDateStep({
           })}
         </div>
       </section>
+      </div>
 
       <div className="pointer-events-none fixed right-0 bottom-24 left-0 z-40 px-6">
         <div className="pointer-events-auto mx-auto max-w-md">

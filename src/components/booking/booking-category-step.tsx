@@ -70,7 +70,7 @@ export function BookingCategoryStep({
   }, []);
 
   return (
-    <div className="space-y-5">
+    <div className="@container space-y-5">
       {selectedServices.length > 0 ? (
         <div className="rounded-2xl border border-[var(--premium-gold-light)]/35 bg-white px-4 py-3.5 shadow-[0_4px_20px_rgba(125,163,196,0.12)]">
           <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--premium-gold-light)] uppercase">
@@ -118,7 +118,7 @@ export function BookingCategoryStep({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 @min-[32rem]:grid-cols-4">
         {BOOKING_CATEGORY_CARDS.map((card, index) => (
           <div
             key={card.category}

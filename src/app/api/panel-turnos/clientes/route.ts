@@ -16,11 +16,16 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
+  const rawLimit = url.searchParams.get("limit");
+  const parsedLimit = rawLimit == null || rawLimit.trim() === "" ? Number.NaN : Number(rawLimit);
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(200, Math.max(1, Math.trunc(parsedLimit)))
+    : 80;
 
   try {
     const db = await getDb();
     await ensureReservationIndexes(db);
-    const clients = await listClientsSummary(db, { q, limit: 80 });
+    const clients = await listClientsSummary(db, { q, limit });
     return NextResponse.json({ clients });
   } catch (e) {
     console.error("[api/panel-turnos/clientes GET]", e);
