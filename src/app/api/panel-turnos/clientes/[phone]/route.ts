@@ -13,7 +13,13 @@ import {
 import { verifyPanelCookie } from "@/lib/panel-turnos-auth";
 import { listReservationsByPhoneDigits } from "@/lib/reservations/admin-queries";
 import { ensureReservationIndexes } from "@/lib/reservations/service";
-import { getVipManualForPhone, getDepositExemptManualForPhone } from "@/lib/vip/customer-profiles";
+import { InvalidCustomerBirthError, parseCustomerBirthInput } from "@/lib/vip/client-birthday";
+import {
+  getCustomerBirthForPhone,
+  getDepositExemptManualForPhone,
+  getVipManualForPhone,
+  setCustomerBirthForPhone,
+} from "@/lib/vip/customer-profiles";
 import { countPastVisits, resolveVipStatus } from "@/lib/vip/eligibility";
 import { resolveDepositExempt } from "@/lib/reservations/deposit-exempt";
 
@@ -50,6 +56,7 @@ export async function GET(_request: Request, context: { params: Promise<{ phone:
       isVip: vip.isVip,
       depositExemptManual,
     });
+    const birth = await getCustomerBirthForPhone(db, canonical);
 
     return NextResponse.json({
       client: {
@@ -64,6 +71,9 @@ export async function GET(_request: Request, context: { params: Promise<{ phone:
         depositExempt: deposit.depositExempt,
         depositExemptSource: deposit.source,
         depositExemptManual,
+        birthDay: birth.birthDay,
+        birthMonth: birth.birthMonth,
+        birthYear: birth.birthYear,
       },
       visits: visits.map(serializePanelClientVisit),
     });
@@ -106,6 +116,24 @@ export async function PUT(request: Request, context: { params: Promise<{ phone: 
     return NextResponse.json({ error: "Nombre y WhatsApp son obligatorios." }, { status: 400 });
   }
 
+  const bodyRecord = typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+  const birthSent = "birthDay" in bodyRecord || "birthMonth" in bodyRecord || "birthYear" in bodyRecord;
+  let birthToSave: ReturnType<typeof parseCustomerBirthInput> | undefined;
+  if (birthSent) {
+    try {
+      birthToSave = parseCustomerBirthInput({
+        birthDay: bodyRecord.birthDay,
+        birthMonth: bodyRecord.birthMonth,
+        birthYear: bodyRecord.birthYear,
+      });
+    } catch (e) {
+      if (e instanceof InvalidCustomerBirthError) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      throw e;
+    }
+  }
+
   try {
     const db = await getDb();
     await ensureReservationIndexes(db);
@@ -114,7 +142,13 @@ export async function PUT(request: Request, context: { params: Promise<{ phone: 
       customerName: rawName,
       customerPhone: rawPhone,
     });
-    return NextResponse.json({ ok: true as const, ...result });
+    const birth =
+      birthToSave !== undefined
+        ? await setCustomerBirthForPhone(db, result.phoneDigits, birthToSave, {
+            customerName: result.customerName,
+          })
+        : await getCustomerBirthForPhone(db, result.phoneDigits);
+    return NextResponse.json({ ok: true as const, ...result, ...birth });
   } catch (e) {
     if (e instanceof ClientIdentityInvalidError) {
       return NextResponse.json({ error: e.message }, { status: 400 });

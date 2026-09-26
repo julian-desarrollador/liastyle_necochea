@@ -2,6 +2,14 @@ import type { Db } from "mongodb";
 
 import { canonicalPhoneDigitsAR, customerPhoneDigitsQueryValues } from "@/lib/customer/phone-canonical-ar";
 
+import {
+  addCalendarDays,
+  ageTurningOnBirthday,
+  artDateParts,
+  daysUntilBirthday,
+  type CustomerBirth,
+  type UpcomingBirthday,
+} from "./client-birthday";
 import type { VipManual } from "./eligibility";
 
 const COLLECTION = "customer_profiles";
@@ -18,9 +26,23 @@ export type CustomerProfileDoc = {
    * ausente/`null` = automático (VIP sin seña).
    */
   depositExemptManual?: boolean | null;
+  /** Día del mes (1–31). Junto con `birthMonth`. */
+  birthDay?: number | null;
+  /** Mes (1–12). */
+  birthMonth?: number | null;
+  /** Año opcional. Ausente si Analia no lo cargó. */
+  birthYear?: number | null;
   updatedAt: Date;
   updatedBy?: "panel";
 };
+
+export type StoredCustomerBirth = {
+  birthDay: number | null;
+  birthMonth: number | null;
+  birthYear: number | null;
+};
+
+export type { UpcomingBirthday };
 
 let indexesReady = false;
 
@@ -230,6 +252,116 @@ export async function setDepositExemptManualForPhone(
     { upsert: true },
   );
   return depositExemptManual;
+}
+
+export async function getCustomerBirthForPhone(db: Db, phoneDigits: string): Promise<StoredCustomerBirth> {
+  const doc = await findProfileDoc(db, phoneDigits);
+  if (!doc || doc.birthDay == null || doc.birthMonth == null) {
+    return { birthDay: null, birthMonth: null, birthYear: null };
+  }
+  return {
+    birthDay: doc.birthDay,
+    birthMonth: doc.birthMonth,
+    birthYear: doc.birthYear ?? null,
+  };
+}
+
+/** `birth === null` borra la fecha. Crea el perfil si todavía no existe. */
+export async function setCustomerBirthForPhone(
+  db: Db,
+  phoneDigits: string,
+  birth: CustomerBirth | null,
+  opts?: { customerName?: string | null },
+): Promise<StoredCustomerBirth> {
+  await ensureCustomerProfileIndexes(db);
+  const key = normalizePhoneKey(phoneDigits);
+  if (!key) throw new Error("Teléfono inválido.");
+
+  const col = db.collection<CustomerProfileDoc>(COLLECTION);
+  const now = new Date();
+  const nameSet = opts?.customerName != null ? { customerName: opts.customerName } : {};
+  const existing = await col.findOne({ phoneDigits: { $in: customerPhoneDigitsQueryValues(key) } });
+  const filter = existing ? { _id: existing._id } : { phoneDigits: key };
+
+  if (!birth) {
+    await col.updateOne(
+      filter,
+      {
+        $unset: { birthDay: "", birthMonth: "", birthYear: "" },
+        $set: {
+          phoneDigits: key,
+          updatedAt: now,
+          updatedBy: "panel" as const,
+          ...nameSet,
+        },
+      },
+      { upsert: !existing },
+    );
+    return { birthDay: null, birthMonth: null, birthYear: null };
+  }
+
+  const unset: Record<string, ""> = {};
+  const set: Record<string, unknown> = {
+    phoneDigits: key,
+    birthDay: birth.birthDay,
+    birthMonth: birth.birthMonth,
+    updatedAt: now,
+    updatedBy: "panel" as const,
+    ...nameSet,
+  };
+  if (birth.birthYear == null) unset.birthYear = "";
+  else set.birthYear = birth.birthYear;
+
+  await col.updateOne(
+    filter,
+    Object.keys(unset).length > 0 ? { $set: set, $unset: unset } : { $set: set },
+    { upsert: !existing },
+  );
+
+  return {
+    birthDay: birth.birthDay,
+    birthMonth: birth.birthMonth,
+    birthYear: birth.birthYear,
+  };
+}
+
+/** Cumpleaños de hoy y los 6 días siguientes (ART). */
+export async function listUpcomingBirthdays(db: Db, now = new Date()): Promise<UpcomingBirthday[]> {
+  await ensureCustomerProfileIndexes(db);
+  const docs = await db
+    .collection<CustomerProfileDoc>(COLLECTION)
+    .find({
+      birthDay: { $gte: 1, $lte: 31 },
+      birthMonth: { $gte: 1, $lte: 12 },
+    })
+    .toArray();
+
+  const today = artDateParts(now);
+  const out: UpcomingBirthday[] = [];
+  for (const doc of docs) {
+    if (doc.birthDay == null || doc.birthMonth == null) continue;
+    const daysUntil = daysUntilBirthday(
+      { birthDay: doc.birthDay, birthMonth: doc.birthMonth },
+      now,
+    );
+    if (daysUntil == null) continue;
+    const occurs = addCalendarDays(today, daysUntil);
+    const birthYear = doc.birthYear ?? null;
+    out.push({
+      phoneDigits: doc.phoneDigits,
+      customerName: doc.customerName?.trim() || "Clienta",
+      birthDay: doc.birthDay,
+      birthMonth: doc.birthMonth,
+      birthYear,
+      daysUntil,
+      age: ageTurningOnBirthday(birthYear, occurs.year),
+    });
+  }
+
+  out.sort(
+    (a, b) => a.daysUntil - b.daysUntil || a.customerName.localeCompare(b.customerName, "es"),
+  );
+  return out;
 }
 
 function queryKeysForPhone(phoneDigits: string): string[] {

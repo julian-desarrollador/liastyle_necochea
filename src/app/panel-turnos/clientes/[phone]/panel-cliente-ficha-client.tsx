@@ -8,6 +8,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { PanelClientVisit } from "@/lib/panel/client-serialize";
 import { isPublicOnlineDepositEnabled } from "@/lib/reservations/public-deposit";
 import {
+  BIRTH_MONTH_OPTIONS,
+  ageAsOfToday,
+  formatBirthdayDate,
+} from "@/lib/vip/client-birthday";
+import {
   panelBackBtn,
   panelCard,
   panelContainer,
@@ -29,6 +34,9 @@ type ClientInfo = {
   depositExempt?: boolean;
   depositExemptSource?: "vip" | "manual_exempt" | "manual_charge" | "none";
   depositExemptManual?: boolean | null;
+  birthDay?: number | null;
+  birthMonth?: number | null;
+  birthYear?: number | null;
 };
 
 type Props = {
@@ -41,6 +49,18 @@ function visitStatusLabel(status: string): string {
   if (status === "completed") return "Realizada";
   if (status === "no_show") return "No asistió";
   return "Confirmada";
+}
+
+function birthdaySummary(client: ClientInfo): string {
+  if (client.birthDay == null || client.birthMonth == null) return "Sin fecha de nacimiento";
+  const date = formatBirthdayDate(client.birthDay, client.birthMonth);
+  const age = ageAsOfToday({
+    birthDay: client.birthDay,
+    birthMonth: client.birthMonth,
+    birthYear: client.birthYear ?? null,
+  });
+  if (age == null) return `Cumpleaños: ${date}`;
+  return `Cumpleaños: ${date} · ${age} ${age === 1 ? "año" : "años"}`;
 }
 
 function whatsAppChatUrl(phone: string): string | null {
@@ -66,6 +86,9 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
+  const [draftBirthDay, setDraftBirthDay] = useState("");
+  const [draftBirthMonth, setDraftBirthMonth] = useState("");
+  const [draftBirthYear, setDraftBirthYear] = useState("");
   const [identitySaving, setIdentitySaving] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
 
@@ -109,6 +132,9 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
     if (!client) return;
     setDraftName(client.customerName);
     setDraftPhone(client.customerPhone);
+    setDraftBirthDay(client.birthDay != null ? String(client.birthDay) : "");
+    setDraftBirthMonth(client.birthMonth != null ? String(client.birthMonth) : "");
+    setDraftBirthYear(client.birthYear != null ? String(client.birthYear) : "");
     setIdentityError(null);
     setEditingIdentity(true);
   }
@@ -116,6 +142,40 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   function cancelIdentityEdit() {
     setEditingIdentity(false);
     setIdentityError(null);
+  }
+
+  async function clearBirthday() {
+    if (!client?.birthDay || !client.birthMonth) return;
+    if (!window.confirm("¿Quitar la fecha de nacimiento?")) return;
+    setIdentitySaving(true);
+    setIdentityError(null);
+    try {
+      const res = await fetch(`/api/panel-turnos/clientes/${encodeURIComponent(phoneDigits)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          customerName: client.customerName,
+          customerPhone: client.customerPhone,
+          birthDay: null,
+          birthMonth: null,
+          birthYear: null,
+        }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setIdentityError(data.error ?? "No se pudo quitar la fecha.");
+        return;
+      }
+      setClient((prev) =>
+        prev ? { ...prev, birthDay: null, birthMonth: null, birthYear: null } : prev,
+      );
+      setEditingIdentity(false);
+    } catch {
+      setIdentityError("Sin conexión. Probá de nuevo.");
+    } finally {
+      setIdentitySaving(false);
+    }
   }
 
   async function saveIdentity() {
@@ -126,13 +186,22 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ customerName: draftName, customerPhone: draftPhone }),
+        body: JSON.stringify({
+          customerName: draftName,
+          customerPhone: draftPhone,
+          birthDay: draftBirthDay === "" ? null : Number(draftBirthDay),
+          birthMonth: draftBirthMonth === "" ? null : Number(draftBirthMonth),
+          birthYear: draftBirthYear.trim() === "" ? null : Number(draftBirthYear.trim()),
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
         phoneDigits?: string;
         customerName?: string;
         customerPhone?: string;
+        birthDay?: number | null;
+        birthMonth?: number | null;
+        birthYear?: number | null;
       };
       if (!res.ok) {
         setIdentityError(data.error ?? "No se pudieron guardar los datos.");
@@ -150,6 +219,9 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
               customerName: data.customerName?.trim() || prev.customerName,
               customerPhone: data.customerPhone?.trim() || prev.customerPhone,
               phoneDigits: nextPhone,
+              birthDay: data.birthDay ?? null,
+              birthMonth: data.birthMonth ?? null,
+              birthYear: data.birthYear ?? null,
             }
           : prev,
       );
@@ -336,15 +408,33 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
                 <p className="mt-1 text-[13px] text-gray-400">
                   {client.visitCount} {client.visitCount === 1 ? "visita realizada" : "visitas realizadas"}
                 </p>
+                <p className="mt-1 text-[13px] text-gray-500">{birthdaySummary(client)}</p>
                 {!editingIdentity ? (
-                  <button
-                    type="button"
-                    onClick={startIdentityEdit}
-                    className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-                    Editar datos
-                  </button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={startIdentityEdit}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                      Editar datos
+                    </button>
+                    {client.birthDay != null && client.birthMonth != null ? (
+                      <button
+                        type="button"
+                        disabled={identitySaving}
+                        onClick={() => void clearBirthday()}
+                        className="inline-flex cursor-pointer items-center rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        {identitySaving ? "Quitando…" : "Quitar fecha"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {identityError && !editingIdentity ? (
+                  <p role="alert" className="mt-2 text-[14px] text-red-700">
+                    {identityError}
+                  </p>
                 ) : null}
               </>
             ) : (
@@ -379,6 +469,61 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
               inputMode="tel"
               className={panelInput}
             />
+            <p className={`${panelLabel} mt-3`}>Fecha de nacimiento</p>
+            <div className="mt-1.5 grid grid-cols-3 gap-2">
+              <div>
+                <label htmlFor="client-birth-day" className="sr-only">
+                  Día
+                </label>
+                <select
+                  id="client-birth-day"
+                  value={draftBirthDay}
+                  onChange={(e) => setDraftBirthDay(e.target.value)}
+                  className={`${panelInput} mt-0`}
+                >
+                  <option value="">Día</option>
+                  {Array.from({ length: 31 }, (_, i) => String(i + 1)).map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="client-birth-month" className="sr-only">
+                  Mes
+                </label>
+                <select
+                  id="client-birth-month"
+                  value={draftBirthMonth}
+                  onChange={(e) => setDraftBirthMonth(e.target.value)}
+                  className={`${panelInput} mt-0`}
+                >
+                  <option value="">Mes</option>
+                  {BIRTH_MONTH_OPTIONS.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="client-birth-year" className="sr-only">
+                  Año
+                </label>
+                <input
+                  id="client-birth-year"
+                  type="text"
+                  inputMode="numeric"
+                  value={draftBirthYear}
+                  onChange={(e) => setDraftBirthYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Año"
+                  autoComplete="bday-year"
+                  className={`${panelInput} mt-0`}
+                />
+              </div>
+            </div>
+            <p className="mt-1 text-[12px] text-gray-400">El año es opcional.</p>
             {identityError ? (
               <p role="alert" className="mt-2 text-[14px] text-red-700">
                 {identityError}

@@ -25,6 +25,7 @@ import {
 } from "@/lib/booking/panel-month-grid";
 import { pickScrollToReservationId } from "@/lib/booking/panel-now-focus";
 import { canonicalPhoneDigitsAR } from "@/lib/customer/phone-canonical-ar";
+import { birthdayWhenLabel, formatBirthdayDate, type UpcomingBirthday } from "@/lib/vip/client-birthday";
 
 export type { PanelAgendaBlock, PanelReservation } from "@/components/panel/panel-types";
 
@@ -69,6 +70,15 @@ function whatsAppChatUrl(
   return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
 }
 
+function birthdayWhatsAppUrl(phoneDigits: string, customerName: string): string | null {
+  const n = whatsAppDigitsFromStoredPhone(phoneDigits);
+  if (!n) return null;
+  const name = customerName.trim();
+  const greet = name && name !== "Clienta" ? `Hola ${name}, ¡feliz cumpleaños! 🎂` : "¡Feliz cumpleaños! 🎂";
+  const text = `${greet} Te escribimos desde Lia Style Necochea.`;
+  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
+}
+
 export function PanelTurnosDashboard() {
   const router = useRouter();
   const now = useMemo(() => new Date(), []);
@@ -76,6 +86,7 @@ export function PanelTurnosDashboard() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [list, setList] = useState<PanelReservation[]>([]);
   const [agendaBlocks, setAgendaBlocks] = useState<PanelAgendaBlock[]>([]);
+  const [birthdays, setBirthdays] = useState<UpcomingBirthday[]>([]);
   const [loading, setLoading] = useState(true);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -136,6 +147,23 @@ export function PanelTurnosDashboard() {
       alive = false;
     };
   }, [year, month, router, refreshTick]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/panel-turnos/cumpleanos", { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { birthdays?: UpcomingBirthday[] };
+        if (alive) setBirthdays(data.birthdays ?? []);
+      } catch {
+        if (alive) setBirthdays([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const visibleReservations = useMemo(() => {
     if (showCancelled) return list;
@@ -302,6 +330,49 @@ export function PanelTurnosDashboard() {
             <Users className="h-5 w-5 text-[#7da3c4]" strokeWidth={2.2} />
             Clientes
           </Link>
+
+          {birthdays.length > 0 ? (
+            <section className={`${panelCard} mt-4 p-4`} aria-label="Cumpleaños">
+              <p className="text-[12px] font-semibold tracking-wide text-gray-500 uppercase">Cumpleaños</p>
+              <ul className="mt-3 divide-y divide-gray-100">
+                {birthdays.map((birthday) => {
+                  const wa = birthdayWhatsAppUrl(birthday.phoneDigits, birthday.customerName);
+                  return (
+                    <li key={birthday.phoneDigits} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/panel-turnos/clientes/${encodeURIComponent(birthday.phoneDigits)}`}
+                          className="block truncate font-montserrat text-[16px] font-semibold text-gray-900"
+                        >
+                          {birthday.customerName}
+                        </Link>
+                        <p className="mt-0.5 text-[13px] text-gray-500">
+                          {birthdayWhenLabel(birthday.daysUntil)}
+                          {birthday.age != null
+                            ? ` · cumple ${birthday.age} ${birthday.age === 1 ? "año" : "años"}`
+                            : ""}
+                          {" 🎂"}
+                        </p>
+                        <p className="mt-0.5 text-[14px] text-gray-600">
+                          {formatBirthdayDate(birthday.birthDay, birthday.birthMonth)}
+                        </p>
+                      </div>
+                      {wa ? (
+                        <a
+                          href={wa}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-[13px] font-medium text-[#1A7A3A] underline-offset-2 hover:underline"
+                        >
+                          Enviar WhatsApp
+                        </a>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
         </header>
 
         <section className={`mt-5 ${panelCard} p-4`}>
