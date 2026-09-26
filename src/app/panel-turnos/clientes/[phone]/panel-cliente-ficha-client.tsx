@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import type { PanelClientVisit } from "@/lib/panel/client-serialize";
+import { isPublicOnlineDepositEnabled } from "@/lib/reservations/public-deposit";
 import {
   panelBackBtn,
   panelCard,
@@ -484,6 +485,11 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
                 <p className="mt-1 text-[14px] text-gray-600">
                   Por defecto las VIP no pagan seña. Acá elegís excepciones.
                 </p>
+                {!isPublicOnlineDepositEnabled() ? (
+                  <p className="mt-2 text-[13px] leading-snug text-amber-800">
+                    Seña online pausada: las reservas de la web se confirman sin cobro.
+                  </p>
+                ) : null}
               </div>
               {depositError ? (
                 <p role="alert" className="mt-3 text-[14px] text-red-700">

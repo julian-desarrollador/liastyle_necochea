@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { CategoryPhotoCard } from "@/components/category-photo-card";
 import { BOOKING_CATEGORY_CARDS } from "@/lib/booking/category-cards";
 import { SALON_TREATMENT_OPTIONS } from "@/lib/booking/salon-availability";
+import { isPublicOnlineDepositEnabled } from "@/lib/reservations/public-deposit";
 import { findSalonTreatmentById, type TreatmentCategory } from "@/lib/treatments/catalog";
 import { formatArs, summarizeDepositForTreatments } from "@/lib/treatments/deposit";
 
@@ -81,7 +82,7 @@ export function BookingCategoryStep({
           {selectedDurationLabel ? (
             <p className="mt-1 text-[12px] text-[#7f7c7a]">{selectedDurationLabel}</p>
           ) : null}
-          {depositSummary && depositSummary.depositAmountArs > 0 ? (
+          {isPublicOnlineDepositEnabled() && depositSummary && depositSummary.depositAmountArs > 0 ? (
             <p className="mt-1.5 text-[12px] font-medium text-[#1c1b1b]">
               Seña: {depositSummary.priceIsFrom ? "desde " : ""}
               {formatArs(depositSummary.depositAmountArs)}
@@ -114,7 +115,9 @@ export function BookingCategoryStep({
         </div>
       ) : (
         <p className="px-0.5 text-[12px] leading-snug text-[#7f7c7a]">
-          En la mayoría de los servicios, para reservar se abona el valor con Mercado Pago.
+          {isPublicOnlineDepositEnabled()
+            ? "En la mayoría de los servicios, para reservar se abona el valor con Mercado Pago."
+            : "Elegí una categoría para armar el turno. Por ahora se reserva sin seña online."}
         </p>
       )}
 

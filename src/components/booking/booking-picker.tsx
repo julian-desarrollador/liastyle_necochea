@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Info, MessageCircle, Trash2 } from "lucide-r
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { findSalonTreatmentById, type TreatmentCategory } from "@/lib/treatments/catalog";
+import { isPublicOnlineDepositEnabled } from "@/lib/reservations/public-deposit";
 import { formatArs, summarizeDepositForTreatments } from "@/lib/treatments/deposit";
 import {
   CAMBIO_ESTRUCTURA_BOOKING_GROUPS,
@@ -812,7 +813,10 @@ export function BookingPicker({
                   </span>
                 </div>
               ) : null}
-              {bookingContext === "public" && depositSummary && depositSummary.depositAmountArs > 0 ? (
+              {bookingContext === "public" &&
+              isPublicOnlineDepositEnabled() &&
+              depositSummary &&
+              depositSummary.depositAmountArs > 0 ? (
                 <p className={`mt-1.5 text-[11px] font-medium ${textPrimary}`}>
                   Seña: {depositSummary.priceIsFrom ? "desde " : ""}
                   {formatArs(depositSummary.depositAmountArs)}
@@ -846,7 +850,10 @@ export function BookingPicker({
                   {selectedDurationLabel}
                 </p>
               ) : null}
-              {bookingContext === "public" && depositSummary && depositSummary.depositAmountArs > 0 ? (
+              {bookingContext === "public" &&
+              isPublicOnlineDepositEnabled() &&
+              depositSummary &&
+              depositSummary.depositAmountArs > 0 ? (
                 <p className={`mt-1 text-[11px] font-medium ${textPrimary}`}>
                   Seña: {depositSummary.priceIsFrom ? "desde " : ""}
                   {formatArs(depositSummary.depositAmountArs)}
@@ -1207,6 +1214,7 @@ export function BookingPicker({
                     ) : null}
                   </div>
                   {bookingContext === "public" &&
+                  isPublicOnlineDepositEnabled() &&
                   depositSummary &&
                   depositSummary.depositAmountArs > 0 &&
                   selectedTreatmentIds.length > 0 ? (
