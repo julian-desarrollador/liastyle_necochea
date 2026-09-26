@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, FileText, MessageCircle, Pencil } from "lucide-react";
+import { ChevronDown, ChevronLeft, FileText, MessageCircle, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -83,6 +83,7 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   const [vipError, setVipError] = useState<string | null>(null);
   const [depositBusy, setDepositBusy] = useState(false);
   const [depositError, setDepositError] = useState<string | null>(null);
+  const [depositOpen, setDepositOpen] = useState(false);
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
@@ -126,6 +127,7 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
   useEffect(() => {
     setEditingIdentity(false);
     setIdentityError(null);
+    setDepositOpen(false);
   }, [phoneDigits]);
 
   function startIdentityEdit() {
@@ -620,55 +622,72 @@ export function PanelClienteFichaClient({ phoneDigits }: Props) {
             </article>
 
             <article className={`${panelCard} p-4`}>
-              <div>
-                <p className="text-[12px] font-semibold tracking-wide text-gray-500 uppercase">
-                  Seña online
-                </p>
-                <p className="mt-1 font-montserrat text-[17px] font-semibold text-gray-900">
-                  {depositLabel}
-                </p>
-                <p className="mt-1 text-[14px] text-gray-600">
-                  Por defecto las VIP no pagan seña. Acá elegís excepciones.
-                </p>
-                {!isPublicOnlineDepositEnabled() ? (
-                  <p className="mt-2 text-[13px] leading-snug text-amber-800">
-                    Seña online pausada: las reservas de la web se confirman sin cobro.
-                  </p>
-                ) : null}
-              </div>
-              {depositError ? (
-                <p role="alert" className="mt-3 text-[14px] text-red-700">
-                  {depositError}
-                </p>
+              <button
+                type="button"
+                aria-expanded={depositOpen}
+                onClick={() => setDepositOpen((open) => !open)}
+                className="flex w-full cursor-pointer items-center gap-3 text-left"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-semibold tracking-wide text-gray-500 uppercase">
+                    Seña online
+                  </span>
+                  <span className="mt-1 block font-montserrat text-[17px] font-semibold text-gray-900">
+                    {depositLabel}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`h-5 w-5 shrink-0 text-gray-500 transition ${depositOpen ? "rotate-180" : ""}`}
+                  strokeWidth={2}
+                />
+              </button>
+              {depositOpen ? (
+                <>
+                  <div className="mt-3">
+                    <p className="text-[14px] text-gray-600">
+                      Por defecto las VIP no pagan seña. Acá elegís excepciones.
+                    </p>
+                    {!isPublicOnlineDepositEnabled() ? (
+                      <p className="mt-2 text-[13px] leading-snug text-amber-800">
+                        Seña online pausada: las reservas de la web se confirman sin cobro.
+                      </p>
+                    ) : null}
+                  </div>
+                  {depositError ? (
+                    <p role="alert" className="mt-3 text-[14px] text-red-700">
+                      {depositError}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      disabled={depositBusy || client.depositExemptManual == null}
+                      onClick={() => void updateDepositExempt(null)}
+                      className="flex h-11 w-full cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[14px] font-medium text-gray-700 disabled:opacity-60"
+                    >
+                      {depositBusy ? "Guardando…" : "Usar regla automática (VIP sin seña)"}
+                    </button>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        disabled={depositBusy || client.depositExemptManual === true}
+                        onClick={() => void updateDepositExempt(true)}
+                        className={`${panelPrimaryBtn} h-11 flex-1 text-[14px] disabled:opacity-60`}
+                      >
+                        {depositBusy ? "Guardando…" : "No cobrar seña"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={depositBusy || client.depositExemptManual === false}
+                        onClick={() => void updateDepositExempt(false)}
+                        className="flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[14px] font-medium text-gray-700 disabled:opacity-60"
+                      >
+                        {depositBusy ? "Guardando…" : "Cobrar seña"}
+                      </button>
+                    </div>
+                  </div>
+                </>
               ) : null}
-              <div className="mt-4 flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={depositBusy || client.depositExemptManual == null}
-                  onClick={() => void updateDepositExempt(null)}
-                  className="flex h-11 w-full cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[14px] font-medium text-gray-700 disabled:opacity-60"
-                >
-                  {depositBusy ? "Guardando…" : "Usar regla automática (VIP sin seña)"}
-                </button>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    disabled={depositBusy || client.depositExemptManual === true}
-                    onClick={() => void updateDepositExempt(true)}
-                    className={`${panelPrimaryBtn} h-11 flex-1 text-[14px] disabled:opacity-60`}
-                  >
-                    {depositBusy ? "Guardando…" : "No cobrar seña"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={depositBusy || client.depositExemptManual === false}
-                    onClick={() => void updateDepositExempt(false)}
-                    className="flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-[14px] font-medium text-gray-700 disabled:opacity-60"
-                  >
-                    {depositBusy ? "Guardando…" : "Cobrar seña"}
-                  </button>
-                </div>
-              </div>
             </article>
 
             <p className="text-[13px] font-semibold tracking-wide text-gray-500 uppercase">Historial de visitas</p>

@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Palette,
   Scissors,
+  Smartphone,
   Sparkles,
   Trash2,
   User,
@@ -395,7 +396,12 @@ export const PanelReservationCard = forwardRef<HTMLElement, PanelReservationCard
               <User className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
               Carga manual
             </p>
-          ) : null}
+          ) : (
+            <p className={`mt-2 flex items-center gap-1.5 text-[12px] ${focused ? "text-gray-600" : "text-gray-500"}`}>
+              <Smartphone className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+              Reservó el usuario
+            </p>
+          )}
 
           {fichaHref ? (
             <Link
