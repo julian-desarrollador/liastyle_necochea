@@ -642,11 +642,11 @@ export default function TurnosClient({ initialTreatment = "" }: TurnosClientProp
               />
             ))}
           </div>
-          <p className="mt-2 text-center text-sm text-[#7f7c7a]">{bookingStepHint}</p>
+          <p className="mt-3 text-center text-xl leading-snug font-medium text-[#3f3c3a]">{bookingStepHint}</p>
         </div>
 
         {sessionStatus === "authed" && sessionDisplayName ? (
-          <p className="mt-4 text-center text-sm text-[#7f7c7a]">
+          <p className="mt-3 text-center text-2xl text-[#3f3c3a]">
             Hola, <span className="font-semibold text-[var(--premium-gold-light)]">{sessionDisplayName}</span>
           </p>
         ) : null}

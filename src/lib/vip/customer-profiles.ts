@@ -83,6 +83,18 @@ export async function getDepositExemptManualForPhone(
   return doc.depositExemptManual;
 }
 
+/** Nombre de ficha si es usable para saludo / Mis datos (no crea perfil). */
+export function usableCustomerDisplayName(raw: string | null | undefined): string | null {
+  const name = raw?.trim() ?? "";
+  if (name.length < 2 || name === "Cliente") return null;
+  return name;
+}
+
+export async function getCustomerNameForPhone(db: Db, phoneDigits: string): Promise<string | null> {
+  const doc = await findProfileDoc(db, phoneDigits);
+  return usableCustomerDisplayName(doc?.customerName);
+}
+
 /** Mapa phoneDigits canónico → vipManual (solo overrides existentes). */
 export async function getVipManualMapForPhones(
   db: Db,

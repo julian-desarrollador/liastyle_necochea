@@ -113,13 +113,11 @@ export function BookingCategoryStep({
             ) : null}
           </div>
         </div>
-      ) : (
+      ) : isPublicOnlineDepositEnabled() ? (
         <p className="px-0.5 text-[12px] leading-snug text-[#7f7c7a]">
-          {isPublicOnlineDepositEnabled()
-            ? "En la mayoría de los servicios, para reservar se abona el valor con Mercado Pago."
-            : "Elegí una categoría para armar el turno. Por ahora se reserva sin seña online."}
+          En la mayoría de los servicios, para reservar se abona el valor con Mercado Pago.
         </p>
-      )}
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2.5 @min-[32rem]:grid-cols-4">
         {BOOKING_CATEGORY_CARDS.map((card, index) => (

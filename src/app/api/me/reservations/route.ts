@@ -8,6 +8,7 @@ import { getDb } from "@/lib/mongodb";
 import { listReservationsByCustomerPhoneDigits } from "@/lib/reservations/customer-queries";
 import { ensureReservationIndexes } from "@/lib/reservations/service";
 import { serializeReservationForCustomer } from "@/lib/reservations/customer-public-serialize";
+import { getCustomerNameForPhone, usableCustomerDisplayName } from "@/lib/vip/customer-profiles";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,14 @@ export async function GET(request: Request) {
     await ensureReservationIndexes(db);
     const source = normalizeActivitySource(new URL(request.url).searchParams.get("source"));
     const list = await listReservationsByCustomerPhoneDigits(db, digits);
-    const customerName = list.find((r) => r.customerName?.trim())?.customerName?.trim() ?? null;
+    const fromReservations =
+      list.map((r) => usableCustomerDisplayName(r.customerName)).find((n) => n != null) ??
+      list.find((r) => r.customerName?.trim())?.customerName?.trim() ??
+      null;
+    const customerName = (await getCustomerNameForPhone(db, digits)) ?? fromReservations;
     await logCustomerDailyActive(db, { phoneDigits: digits, source, customerName });
     return NextResponse.json({
+      displayName: customerName,
       reservations: list.map(serializeReservationForCustomer),
     });
   } catch (e) {

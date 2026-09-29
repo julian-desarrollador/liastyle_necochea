@@ -20,6 +20,8 @@ export type PerfilSessionCtx = {
   logout: () => Promise<void>;
   /** Llamar después de un login exitoso para refrescar. */
   onLoginSuccess: () => Promise<void>;
+  /** Actualiza el nombre de ficha (y el WhatsApp en caché si viene). */
+  setDisplayName: (name: string, phone?: string) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -89,10 +91,11 @@ export function PerfilSessionProvider({ children }: { children: React.ReactNode 
   // Marca de cuándo fue el último fetch exitoso (para decidir si refetch al volver)
   const lastFetchedAt = useRef<number>(0);
 
-  const applyReservations = useCallback((list: CustomerReservationPublic[]) => {
+  const applyReservations = useCallback((list: CustomerReservationPublic[], displayName?: string | null) => {
     setReservations(list);
     setMe("authed");
-    const name = pickWelcomeName(list);
+    const fromProfile = displayName?.trim() ?? "";
+    const name = fromProfile.length >= 2 ? fromProfile : pickWelcomeName(list);
     setWelcomeName(name);
     lastFetchedAt.current = Date.now();
     const latest = [...list].sort((a, b) => b.startsAtIso.localeCompare(a.startsAtIso))[0];
@@ -119,8 +122,11 @@ export function PerfilSessionProvider({ children }: { children: React.ReactNode 
         setMe((prev) => (prev === "authed" ? "authed" : "guest"));
         return;
       }
-      const data = (await res.json()) as { reservations?: CustomerReservationPublic[] };
-      applyReservations(Array.isArray(data.reservations) ? data.reservations : []);
+      const data = (await res.json()) as {
+        reservations?: CustomerReservationPublic[];
+        displayName?: string | null;
+      };
+      applyReservations(Array.isArray(data.reservations) ? data.reservations : [], data.displayName);
     } catch {
       setMe((prev) => (prev === "authed" ? "authed" : "guest"));
     }
@@ -133,6 +139,16 @@ export function PerfilSessionProvider({ children }: { children: React.ReactNode 
   const onLoginSuccess = useCallback(async () => {
     await fetchReservations();
   }, [fetchReservations]);
+
+  const setDisplayName = useCallback((name: string, phone?: string) => {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) return;
+    setWelcomeName(trimmed);
+    const latest = reservations
+      ? [...reservations].sort((a, b) => b.startsAtIso.localeCompare(a.startsAtIso))[0]
+      : undefined;
+    saveCache(trimmed, phone?.trim() || latest?.customerPhone || "");
+  }, [reservations]);
 
   const logout = useCallback(async () => {
     try {
@@ -169,7 +185,9 @@ export function PerfilSessionProvider({ children }: { children: React.ReactNode 
   }, [fetchReservations]);
 
   return (
-    <PerfilSession.Provider value={{ me, welcomeName, reservations, reload, logout, onLoginSuccess }}>
+    <PerfilSession.Provider
+      value={{ me, welcomeName, reservations, reload, logout, onLoginSuccess, setDisplayName }}
+    >
       {children}
     </PerfilSession.Provider>
   );
