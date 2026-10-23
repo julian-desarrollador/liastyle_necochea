@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PanelBlockCard } from "@/components/panel/panel-block-card";
+import { PanelPushToggle } from "@/components/panel/panel-push-toggle";
 import { PanelReservationCard } from "@/components/panel/panel-reservation-card";
 import type { PanelAgendaBlock, PanelReservation } from "@/components/panel/panel-types";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/booking/panel-month-grid";
 import { pickScrollToReservationId } from "@/lib/booking/panel-now-focus";
 import { canonicalPhoneDigitsAR } from "@/lib/customer/phone-canonical-ar";
+import { unsubscribeThisPanelDevice } from "@/lib/push/panel-push-client";
 import { birthdayWhenLabel, formatBirthdayDate, type UpcomingBirthday } from "@/lib/vip/client-birthday";
 
 export type { PanelAgendaBlock, PanelReservation } from "@/components/panel/panel-types";
@@ -79,11 +81,26 @@ function birthdayWhatsAppUrl(phoneDigits: string, customerName: string): string 
   return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
 }
 
-export function PanelTurnosDashboard() {
+function openedDateParts(dateKey: string | null): { year: number; month: number; dateKey: string } | null {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return { year, month, dateKey };
+}
+
+export function PanelTurnosDashboard({
+  initialDateKey = null,
+  initialShowCancelled = false,
+}: {
+  initialDateKey?: string | null;
+  initialShowCancelled?: boolean;
+}) {
   const router = useRouter();
   const now = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const opened = openedDateParts(initialDateKey);
+  const [year, setYear] = useState(opened?.year ?? now.getFullYear());
+  const [month, setMonth] = useState(opened?.month ?? now.getMonth() + 1);
   const [list, setList] = useState<PanelReservation[]>([]);
   const [agendaBlocks, setAgendaBlocks] = useState<PanelAgendaBlock[]>([]);
   const [birthdays, setBirthdays] = useState<UpcomingBirthday[]>([]);
@@ -92,7 +109,7 @@ export function PanelTurnosDashboard() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [cancellingReservationId, setCancellingReservationId] = useState<string | null>(null);
   const [cancelConfirmReservationId, setCancelConfirmReservationId] = useState<string | null>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(initialShowCancelled);
   const [clockTick, setClockTick] = useState(0);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dayDetailRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +118,7 @@ export function PanelTurnosDashboard() {
   const todayKey = todayYmd(now);
 
   const [selectedKey, setSelectedKey] = useState<string>(() => {
+    if (opened) return opened.dateKey;
     const key = todayYmd(now);
     const [y, m] = key.split("-").map(Number);
     if (y === now.getFullYear() && m === now.getMonth() + 1) return key;
@@ -256,6 +274,7 @@ export function PanelTurnosDashboard() {
 
   async function handleLogout() {
     setLogoutBusy(true);
+    await unsubscribeThisPanelDevice();
     await fetch("/api/panel-turnos/logout", { method: "POST" });
     router.refresh();
     setLogoutBusy(false);
@@ -330,6 +349,8 @@ export function PanelTurnosDashboard() {
             <Users className="h-5 w-5 text-[#7da3c4]" strokeWidth={2.2} />
             Clientes
           </Link>
+
+          <PanelPushToggle />
 
           {birthdays.length > 0 ? (
             <section className={`${panelCard} mt-4 p-4`} aria-label="Cumpleaños">

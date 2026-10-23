@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["web-push"],
   turbopack: {
     root: projectRoot,
   },

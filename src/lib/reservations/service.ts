@@ -24,6 +24,10 @@ import { SALON_TREATMENTS, findSalonTreatmentById, type SalonTreatment } from "@
 import { PUBLIC_DEPOSIT_RATE, summarizeDepositForTreatments } from "@/lib/treatments/deposit";
 
 import { backfillCustomerPhoneDigitsBatch, renormalizeCustomerPhoneDigitsBatch } from "@/lib/reservations/customer-queries";
+import {
+  scheduleCancelledReservationPush,
+  scheduleNewReservationPush,
+} from "@/lib/push/panel-push";
 import { scheduleDueReminderSend } from "@/lib/whatsapp/send-due-reminders";
 import {
   canCustomerCancelByStartsAt,
@@ -399,6 +403,13 @@ export async function insertPublicConfirmedReservationWithoutPayment(
       { $set: { externalReference: id, updatedAt: new Date() } },
     );
     scheduleDueReminderSend(db, id);
+    scheduleNewReservationPush(db, {
+      customerName: doc.customerName,
+      treatmentName: doc.treatmentName,
+      displayDate,
+      timeLocal,
+      dateKey,
+    });
     return {
       ok: true,
       id,
@@ -841,6 +852,19 @@ export async function cancelReservation(
   if (result.modifiedCount !== 1) {
     return { error: "No se pudo cancelar el turno. Probá de nuevo.", code: "CONFLICT" };
   }
+  if (input.actor === "customer" || input.actor === "whatsapp") {
+    scheduleCancelledReservationPush(
+      db,
+      {
+        customerName: doc.customerName,
+        treatmentName: doc.treatmentName,
+        displayDate: doc.displayDate,
+        timeLocal: doc.timeLocal,
+        dateKey: doc.dateKey,
+      },
+      input.actor === "whatsapp",
+    );
+  }
   return { ok: true as const };
 }
 
@@ -1058,6 +1082,13 @@ export async function tryConfirmReservationFromMpPayment(
   }
 
   scheduleDueReminderSend(db, reservation._id.toHexString());
+  scheduleNewReservationPush(db, {
+    customerName: reservation.customerName,
+    treatmentName: reservation.treatmentName,
+    displayDate: reservation.displayDate,
+    timeLocal: reservation.timeLocal,
+    dateKey: reservation.dateKey,
+  });
   return { outcome: "confirmed" };
 }
 

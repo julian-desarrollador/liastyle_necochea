@@ -610,6 +610,8 @@ export default function TurnosClient({ initialTreatment = "" }: TurnosClientProp
     },
   };
 
+  const sessionFirstName = sessionDisplayName?.trim().split(/\s+/)[0] ?? "";
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f8f6f2] pb-32 text-[#1c1b1b]">
       <header className="sticky top-0 z-40 flex w-full flex-col items-center justify-center bg-[#f8f6f2]/90 px-6 pt-8 backdrop-blur-md">
@@ -647,7 +649,27 @@ export default function TurnosClient({ initialTreatment = "" }: TurnosClientProp
 
         {sessionStatus === "authed" && sessionDisplayName ? (
           <p className="mt-3 text-center text-2xl text-[#3f3c3a]">
-            Hola, <span className="font-semibold text-[var(--premium-gold-light)]">{sessionDisplayName}</span>
+            {showCategoryStep ? (
+              <>
+                Hola,{" "}
+                <span className="font-semibold text-[var(--premium-gold-light)]">{sessionDisplayName}</span>
+              </>
+            ) : !dateStepConfirmed ? (
+              <>
+                <span className="font-semibold text-[var(--premium-gold-light)]">{sessionFirstName}</span>
+                , ahora el día
+              </>
+            ) : !selectedTime ? (
+              <>
+                <span className="font-semibold text-[var(--premium-gold-light)]">{sessionFirstName}</span>
+                , ahora el horario
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-[var(--premium-gold-light)]">{sessionFirstName}</span>
+                , confirmá el turno
+              </>
+            )}
           </p>
         ) : null}
       </header>

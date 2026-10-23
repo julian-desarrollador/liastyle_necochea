@@ -3,7 +3,7 @@
   "name": "Panel Lia Style Necochea",
   "short_name": "Panel Lia",
   "start_url": "/panel-turnos",
-  "scope": "/panel-turnos/",
+  "scope": "/panel-turnos",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
