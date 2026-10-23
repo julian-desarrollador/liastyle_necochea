@@ -320,7 +320,10 @@ export function PanelTurnosDashboard({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-gray-500">Panel</p>
-              <h1 className="font-montserrat text-[22px] font-bold leading-tight text-gray-900">Agenda del salón</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="font-montserrat text-[22px] font-bold leading-tight text-gray-900">Agenda del salón</h1>
+                <PanelPushToggle />
+              </div>
               <p className="mt-1 text-[14px] text-gray-500">Lia Style Necochea</p>
             </div>
           </div>
@@ -349,8 +352,6 @@ export function PanelTurnosDashboard({
             <Users className="h-5 w-5 text-[#7da3c4]" strokeWidth={2.2} />
             Clientes
           </Link>
-
-          <PanelPushToggle />
 
           {birthdays.length > 0 ? (
             <section className={`${panelCard} mt-4 p-4`} aria-label="Cumpleaños">
