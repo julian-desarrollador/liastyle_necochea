@@ -18,7 +18,7 @@ function panelDateKey(raw: string | undefined): string | null {
 export default async function PanelTurnosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fecha?: string | string[]; ver?: string | string[] }>;
+  searchParams: Promise<{ fecha?: string | string[]; ver?: string | string[]; bloqueado?: string | string[] }>;
 }) {
   const cookieStore = await cookies();
   const ok = verifyPanelCookie(cookieStore.get("panel_turnos_auth")?.value);
@@ -32,6 +32,10 @@ export default async function PanelTurnosPage({
   const initialShowCancelled = firstQueryValue(params.ver) === "cancelados";
 
   return (
-    <PanelTurnosDashboard initialDateKey={initialDateKey} initialShowCancelled={initialShowCancelled} />
+    <PanelTurnosDashboard
+      initialDateKey={initialDateKey}
+      initialShowCancelled={initialShowCancelled}
+      initialBlockedNotice={firstQueryValue(params.bloqueado) === "1"}
+    />
   );
 }

@@ -66,6 +66,7 @@ function serializeAgendaBlock(b: SalonAgendaBlockDoc) {
     scope: b.scope,
     recurrence: b.recurrence ?? null,
     notes: b.notes ?? null,
+    groupId: b.groupId ?? null,
   };
 }
 

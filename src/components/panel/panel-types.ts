@@ -28,4 +28,5 @@ export type PanelAgendaBlock = {
   scope: string;
   recurrence: { type: "weekly"; untilDateKey?: string | null } | null;
   notes?: string | null;
+  groupId?: string | null;
 };

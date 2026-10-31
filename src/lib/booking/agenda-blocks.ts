@@ -26,6 +26,8 @@ export type SalonAgendaBlockDoc = {
   scope: AgendaBlockScope;
   recurrence: AgendaBlockRecurrence;
   notes?: string | null;
+  /** Agrupa bloqueos creados juntos (ej. varios días de vacaciones) para poder borrarlos de una vez. */
+  groupId?: string | null;
   createdAt: Date;
   createdBy?: string | null;
 };
@@ -238,12 +240,16 @@ export type InsertAgendaBlockInput = {
   scope: AgendaBlockScope;
   recurrence: AgendaBlockRecurrence;
   notes?: string | null;
+  groupId?: string | null;
 };
 
-export async function insertAgendaBlock(
-  db: Db,
+type AgendaBlockInsertDoc = Omit<SalonAgendaBlockDoc, "_id">;
+
+function buildAgendaBlockDoc(
   input: InsertAgendaBlockInput,
-): Promise<{ ok: true; id: string } | { error: string; code?: string }> {
+  now: Date,
+  createdBy: string,
+): { doc: AgendaBlockInsertDoc } | { error: string; code?: string } {
   const anchorDateKey = input.anchorDateKey.trim();
   const timeLocal = input.timeLocal.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDateKey)) {
@@ -278,33 +284,74 @@ export async function insertAgendaBlock(
     return { error: "Fecha u horario inválidos.", code: "INVALID_SLOT" };
   }
 
-  await ensureAgendaBlockIndexes(db);
+  const groupId = input.groupId?.trim() ? input.groupId.trim().slice(0, 64) : null;
+
+  return {
+    doc: {
+      anchorDateKey,
+      anchorWeekday: anchorDt.getDay(),
+      timeLocal,
+      durationMinutes: Math.round(dm),
+      startsAt,
+      displayDate: formatSalonDisplayDate(anchorDateKey),
+      scope,
+      recurrence,
+      notes: input.notes?.trim() ? String(input.notes).trim().slice(0, 500) : null,
+      groupId,
+      createdAt: now,
+      createdBy,
+    },
+  };
+}
+
+function panelCreatedBy() {
+  return (process.env.PANEL_TURNOS_CREATED_BY ?? "panel").trim() || "panel";
+}
+
+export async function insertAgendaBlock(
+  db: Db,
+  input: InsertAgendaBlockInput,
+): Promise<{ ok: true; id: string } | { error: string; code?: string }> {
+  const r = await insertAgendaBlocks(db, [input]);
+  if ("error" in r) return r;
+  return { ok: true, id: r.ids[0] };
+}
+
+/** Valida todos los bloqueos antes de guardar; si alguno es inválido no se guarda ninguno. */
+export async function insertAgendaBlocks(
+  db: Db,
+  inputs: InsertAgendaBlockInput[],
+): Promise<{ ok: true; ids: string[] } | { error: string; code?: string }> {
+  if (inputs.length === 0) return { error: "No hay horarios para bloquear.", code: "EMPTY" };
+  if (inputs.length > 120) return { error: "Demasiados bloqueos de una vez.", code: "TOO_MANY" };
+
   const now = new Date();
-  const createdBy = (process.env.PANEL_TURNOS_CREATED_BY ?? "panel").trim() || "panel";
+  const createdBy = panelCreatedBy();
+  const docs: AgendaBlockInsertDoc[] = [];
+  for (const input of inputs) {
+    const built = buildAgendaBlockDoc(input, now, createdBy);
+    if ("error" in built) return built;
+    docs.push(built.doc);
+  }
 
-  const doc = {
-    anchorDateKey,
-    anchorWeekday: anchorDt.getDay(),
-    timeLocal,
-    durationMinutes: Math.round(dm),
-    startsAt,
-    displayDate: formatSalonDisplayDate(anchorDateKey),
-    scope,
-    recurrence,
-    notes: input.notes?.trim() ? String(input.notes).trim().slice(0, 500) : null,
-    createdAt: now,
-    createdBy,
-  } satisfies Omit<SalonAgendaBlockDoc, "_id">;
-
+  await ensureAgendaBlockIndexes(db);
   try {
-    const r = await db.collection(AGENDA_BLOCKS_COLLECTION).insertOne(doc);
-    return { ok: true, id: r.insertedId.toHexString() };
+    const r = await db.collection(AGENDA_BLOCKS_COLLECTION).insertMany(docs);
+    const ids = docs.map((_, i) => (r.insertedIds[i] as ObjectId).toHexString());
+    return { ok: true, ids };
   } catch (e) {
     if (e instanceof MongoServerError && e.code === 11000) {
       return { error: "No se pudo guardar el bloqueo.", code: "DUPLICATE" };
     }
     throw e;
   }
+}
+
+export async function deleteAgendaBlocksByGroupId(db: Db, groupId: string): Promise<number> {
+  const g = groupId.trim();
+  if (!g) return 0;
+  const r = await db.collection(AGENDA_BLOCKS_COLLECTION).deleteMany({ groupId: g });
+  return r.deletedCount;
 }
 
 export async function deleteAgendaBlockByHexId(db: Db, hexId: string): Promise<boolean> {

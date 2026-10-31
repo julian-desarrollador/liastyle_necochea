@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChevronLeft, ChevronRight, Lock, Plus, Users } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Lock, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +18,7 @@ import {
   panelDaySelected,
   panelPage,
 } from "@/components/panel/panel-ui";
+import { weekdayPlural } from "@/lib/booking/agenda-block-ui";
 import { agendaBlockAppliesToDateKey } from "@/lib/booking/agenda-blocks-shared";
 import {
   PANEL_WEEK_LETTERS,
@@ -92,9 +93,12 @@ function openedDateParts(dateKey: string | null): { year: number; month: number;
 export function PanelTurnosDashboard({
   initialDateKey = null,
   initialShowCancelled = false,
+  initialBlockedNotice = false,
 }: {
   initialDateKey?: string | null;
   initialShowCancelled?: boolean;
+  /** Recién se guardó un bloqueo: mostrar aviso de confirmación. */
+  initialBlockedNotice?: boolean;
 }) {
   const router = useRouter();
   const now = useMemo(() => new Date(), []);
@@ -111,6 +115,9 @@ export function PanelTurnosDashboard({
   const [cancelConfirmReservationId, setCancelConfirmReservationId] = useState<string | null>(null);
   const [showCancelled, setShowCancelled] = useState(initialShowCancelled);
   const [clockTick, setClockTick] = useState(0);
+  const [blockedNotice, setBlockedNotice] = useState(initialBlockedNotice);
+  const [blockToDelete, setBlockToDelete] = useState<PanelAgendaBlock | null>(null);
+  const [deletingBlock, setDeletingBlock] = useState(false);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const dayDetailRef = useRef<HTMLDivElement | null>(null);
 
@@ -204,6 +211,21 @@ export function PanelTurnosDashboard({
     return m;
   }, [visibleReservations, agendaBlocks, grid]);
 
+  const reservationDays = useMemo(() => new Set(visibleReservations.map((r) => r.dateKey)), [visibleReservations]);
+
+  const blockedDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const cell of grid) {
+      if (agendaBlocks.some((b) => agendaBlockAppliesToDateKey(b, cell.dateKey))) set.add(cell.dateKey);
+    }
+    return set;
+  }, [agendaBlocks, grid]);
+
+  const blockGroupSize = useMemo(() => {
+    if (!blockToDelete?.groupId) return 0;
+    return agendaBlocks.filter((b) => b.groupId === blockToDelete.groupId).length;
+  }, [blockToDelete, agendaBlocks]);
+
   const cancelledCountSelectedDay = useMemo(
     () => list.filter((r) => r.dateKey === selectedKey && r.reservationStatus === "cancelled").length,
     [list, selectedKey],
@@ -235,6 +257,14 @@ export function PanelTurnosDashboard({
   }, []);
 
   useEffect(() => {
+    if (!initialBlockedNotice) return;
+    // Sacar `bloqueado=1` de la URL para que el aviso no vuelva a salir al recargar.
+    router.replace(initialDateKey ? `/panel-turnos?fecha=${initialDateKey}` : "/panel-turnos", { scroll: false });
+    const t = window.setTimeout(() => setBlockedNotice(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [initialBlockedNotice, initialDateKey, router]);
+
+  useEffect(() => {
     if (loading || !scrollTargetId) return;
     const el = cardRefs.current[scrollTargetId];
     if (!el) return;
@@ -248,14 +278,21 @@ export function PanelTurnosDashboard({
     setRefreshTick((t) => t + 1);
   }, []);
 
-  async function handleDeleteBlock(blockId: string) {
-    if (!window.confirm("¿Eliminar este bloqueo de agenda?")) return;
-    const res = await fetch(`/api/panel-turnos/agenda-blocks?id=${encodeURIComponent(blockId)}`, {
-      method: "DELETE",
-      credentials: "same-origin",
-    });
-    if (!res.ok) return;
-    reloadMonth();
+  async function handleDeleteBlock(target: { id: string } | { groupId: string }) {
+    const qs =
+      "groupId" in target ? `groupId=${encodeURIComponent(target.groupId)}` : `id=${encodeURIComponent(target.id)}`;
+    setDeletingBlock(true);
+    try {
+      const res = await fetch(`/api/panel-turnos/agenda-blocks?${qs}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) return;
+      setBlockToDelete(null);
+      reloadMonth();
+    } finally {
+      setDeletingBlock(false);
+    }
   }
 
   async function handleCancelReservation(reservationId: string) {
@@ -337,7 +374,7 @@ export function PanelTurnosDashboard({
               Agregar turno
             </Link>
             <Link
-              href="/panel-turnos/bloqueo"
+              href={`/panel-turnos/bloqueo?fecha=${selectedKey}`}
               className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 text-[14px] font-semibold text-amber-900 transition hover:bg-amber-100"
             >
               <Lock className="h-5 w-5" strokeWidth={2.2} />
@@ -432,6 +469,8 @@ export function PanelTurnosDashboard({
             {grid.map((cell) => {
               const sel = cell.dateKey === selectedKey;
               const count = combinedCountsByDay.get(cell.dateKey) ?? 0;
+              const hasReservation = reservationDays.has(cell.dateKey);
+              const hasBlock = count > 0 && blockedDays.has(cell.dateKey);
               const inMonth = cell.inMonth;
 
               return (
@@ -450,16 +489,24 @@ export function PanelTurnosDashboard({
                   >
                     {cell.day}
                   </span>
-                  <span className="mt-0.5 flex h-2 items-center justify-center">
-                    {count > 0 ? (
-                      <span className="block h-1.5 w-1.5 rounded-full bg-[#7da3c4]" />
-                    ) : (
+                  <span className="mt-0.5 flex h-2 items-center justify-center gap-0.5">
+                    {hasReservation ? <span className="block h-1.5 w-1.5 rounded-full bg-[#7da3c4]" /> : null}
+                    {hasBlock ? <span className="block h-1.5 w-1.5 rounded-full bg-amber-500" /> : null}
+                    {!hasReservation && !hasBlock ? (
                       <span className="block h-1.5 w-1.5 rounded-full bg-transparent" />
-                    )}
+                    ) : null}
                   </span>
                 </button>
               );
             })}
+          </div>
+          <div className="mt-3 flex items-center justify-center gap-4 text-[12px] text-gray-500">
+            <span className="flex items-center gap-1.5">
+              <span className="block h-1.5 w-1.5 rounded-full bg-[#7da3c4]" /> Turnos
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="block h-1.5 w-1.5 rounded-full bg-amber-500" /> Bloqueado
+            </span>
           </div>
         </section>
 
@@ -509,7 +556,7 @@ export function PanelTurnosDashboard({
                     key={`block-${row.item.id}`}
                     block={row.item}
                     selectedDateKey={selectedKey}
-                    onDelete={() => void handleDeleteBlock(row.item.id)}
+                    onDelete={() => setBlockToDelete(row.item)}
                   />
                 );
               }
@@ -592,6 +639,75 @@ export function PanelTurnosDashboard({
                 {cancellingReservationId === cancelConfirmReservationId ? "Cancelando..." : "Sí, cancelar"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {blockToDelete ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => {
+            if (!deletingBlock) setBlockToDelete(null);
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-montserrat text-[20px] font-bold text-gray-900">Quitar bloqueo</h3>
+            <p className="mt-2 text-[14px] leading-relaxed text-gray-600">
+              {blockToDelete.recurrence?.type === "weekly"
+                ? `Este bloqueo se repite todos los ${weekdayPlural(blockToDelete.anchorDateKey)}. Se quita de todas las semanas y ese horario vuelve a estar disponible para reservar.`
+                : "Ese horario vuelve a estar disponible para reservar."}
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              {blockToDelete.groupId && blockGroupSize > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={deletingBlock}
+                    onClick={() => void handleDeleteBlock({ id: blockToDelete.id })}
+                    className="h-11 cursor-pointer rounded-xl border border-red-200 bg-white text-[14px] font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                  >
+                    Quitar solo este
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingBlock}
+                    onClick={() => void handleDeleteBlock({ groupId: blockToDelete.groupId as string })}
+                    className="h-11 cursor-pointer rounded-xl border border-red-200 bg-red-50 text-[14px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                  >
+                    Quitar todos los que guardé juntos
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={deletingBlock}
+                  onClick={() => void handleDeleteBlock({ id: blockToDelete.id })}
+                  className="h-11 cursor-pointer rounded-xl border border-red-200 bg-red-50 text-[14px] font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+                >
+                  {deletingBlock ? "Quitando…" : "Sí, quitar bloqueo"}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={deletingBlock}
+                onClick={() => setBlockToDelete(null)}
+                className="h-11 cursor-pointer rounded-xl border border-gray-200 text-[14px] font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+              >
+                Volver
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {blockedNotice ? (
+        <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4" role="status">
+          <div className="flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-[15px] font-semibold text-white shadow-xl">
+            <Check className="h-5 w-5 text-amber-300" strokeWidth={2.6} />
+            Listo, horario bloqueado
           </div>
         </div>
       ) : null}
